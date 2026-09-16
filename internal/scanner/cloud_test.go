@@ -50,14 +50,10 @@ func TestCloudRootIsFlaggedNotWalked(t *testing.T) {
 	}
 	t.Setenv("HOME", home)
 
-	// cloudPaths caches on first use, so drive the matcher explicitly with
-	// this test's home rather than depending on process-wide state.
-	parents, exact := cloudRootsFor(home)
-	if !matchesCloudRoot(provider, parents, exact) {
-		t.Fatal("fixture is not recognised as a provider root")
-	}
-
 	s := New(Options{Root: filepath.Join(home, "Library")})
+	if !s.isCloudRoot(provider) {
+		t.Fatal("the scanner did not recognise the fixture as a provider root")
+	}
 	frames := map[uint32]Frame{}
 	done := make(chan struct{})
 	go func() {

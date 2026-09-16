@@ -129,6 +129,14 @@ type Scanner struct {
 	frames chan Frame
 	prog   chan Progress
 	err    atomic.Pointer[error]
+
+	// Cloud provider locations for the user running this scan, resolved once.
+	cloudParents, cloudExact []string
+}
+
+// isCloudRoot reports whether path is a cloud provider's root directory.
+func (s *Scanner) isCloudRoot(path string) bool {
+	return matchesCloudRoot(path, s.cloudParents, s.cloudExact)
 }
 
 // New builds a Scanner. Nothing runs until Run is called.
@@ -136,6 +144,7 @@ func New(opt Options) *Scanner {
 	s := &Scanner{opt: opt, frames: make(chan Frame, 256), prog: make(chan Progress, 8)}
 	s.cond = sync.NewCond(&s.mu)
 	s.links.init()
+	s.cloudParents, s.cloudExact = homeCloudRoots()
 	return s
 }
 
@@ -481,7 +490,7 @@ func (s *Scanner) makeEntry(job dirJob, name string, st *unix.Stat_t, children *
 	// Directory (or package): decide whether to descend.
 	full := filepath.Join(job.path, name)
 	switch {
-	case !s.opt.ScanCloudStorage && (isCloudRoot(full) || e.Flags&FlagCloud != 0):
+	case !s.opt.ScanCloudStorage && (s.isCloudRoot(full) || e.Flags&FlagCloud != 0):
 		e.Flags |= FlagCloud
 		e.Alloc, e.Logical = 0, 0
 	case alwaysSkip[name] || skipAbs[full]:

@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"golang.org/x/sys/unix"
 )
@@ -26,12 +25,6 @@ const sfDataless = 0x40000000
 //
 // They are still reported as entries, flagged, so the chart can say what they
 // are instead of silently omitting them.
-var (
-	cloudOnce    sync.Once
-	cloudParents []string
-	cloudExact   []string
-)
-
 // cloudRootsFor lists, for one home directory, the directories whose children
 // are provider roots and the provider roots themselves.
 func cloudRootsFor(home string) (parents, exact []string) {
@@ -46,23 +39,19 @@ func cloudRootsFor(home string) (parents, exact []string) {
 		}
 }
 
-func cloudPaths() ([]string, []string) {
-	cloudOnce.Do(func() {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return
-		}
-		cloudParents, cloudExact = cloudRootsFor(home)
-	})
-	return cloudParents, cloudExact
+// homeCloudRoots resolves the current user's provider locations. Each Scanner
+// resolves this once at construction rather than caching it in a package-level
+// variable: a process-wide cache would make the answer depend on whichever
+// caller happened to run first.
+func homeCloudRoots() (parents, exact []string) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, nil
+	}
+	return cloudRootsFor(home)
 }
 
-// isCloudRoot reports whether path is a cloud provider's root directory.
-func isCloudRoot(path string) bool {
-	parents, exact := cloudPaths()
-	return matchesCloudRoot(path, parents, exact)
-}
-
+// matchesCloudRoot reports whether path is a cloud provider's root directory.
 func matchesCloudRoot(path string, parents, exact []string) bool {
 	for _, e := range exact {
 		if path == e {
