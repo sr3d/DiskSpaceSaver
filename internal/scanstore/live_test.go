@@ -54,7 +54,7 @@ func TestLiveViewportDoesNotStallTheWalk(t *testing.T) {
 		}
 		sum := s.Summary()
 		q0 := time.Now()
-		v := s.Tree.Viewport(s.Tree.Root, 5, 0.0008, true)
+		v := s.Tree.Viewport(s.Tree.Root, 5, 0.0008, 0, true)
 		if d := time.Since(q0); d > slowest {
 			slowest = d
 		}

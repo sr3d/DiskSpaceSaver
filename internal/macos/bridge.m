@@ -345,6 +345,58 @@ char *dss_team_id(void) {
     return out;
 }
 
+#pragma mark - Thumbnails
+
+#import <QuickLookThumbnailing/QuickLookThumbnailing.h>
+
+// QuickLook is what Finder uses, so anything Finder can preview — images,
+// PDFs, video, audio artwork, documents — gets a thumbnail here without this
+// file knowing a single file format.
+char *dss_thumbnail(const char *path, int max_points, double scale) {
+    @autoreleasepool {
+        NSURL *url = [NSURL fileURLWithPath:@(path)];
+        if (url == nil) return NULL;
+
+        CGSize size = CGSizeMake(max_points, max_points);
+        QLThumbnailGenerationRequest *req =
+            [[QLThumbnailGenerationRequest alloc] initWithFileAtURL:url
+                                                               size:size
+                                                              scale:scale
+                                                representationTypes:
+                    QLThumbnailGenerationRequestRepresentationTypeThumbnail];
+        // Low quality thumbnails are icons with a badge, which tell the user
+        // nothing they cannot already see in the list.
+        req.minimumDimension = 32;
+
+        __block NSData *png = nil;
+        dispatch_semaphore_t done = dispatch_semaphore_create(0);
+        [[QLThumbnailGenerator sharedGenerator]
+            generateBestRepresentationForRequest:req
+                               completionHandler:^(QLThumbnailRepresentation *rep, NSError *err) {
+            if (rep != nil && err == nil) {
+                CGImageRef cg = rep.CGImage;
+                if (cg != NULL) {
+                    NSBitmapImageRep *bitmap =
+                        [[NSBitmapImageRep alloc] initWithCGImage:cg];
+                    png = [bitmap representationUsingType:NSBitmapImageFileTypePNG
+                                               properties:@{}];
+                }
+            }
+            dispatch_semaphore_signal(done);
+        }];
+
+        // A thumbnail that has to be generated from a large file can take a
+        // moment; one that never arrives must not hold the caller forever.
+        if (dispatch_semaphore_wait(done,
+                dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8 * NSEC_PER_SEC))) != 0) {
+            return NULL;
+        }
+        if (png == nil) return NULL;
+        return dupstr([@"data:image/png;base64," stringByAppendingString:
+                       [png base64EncodedStringWithOptions:0]]);
+    }
+}
+
 #pragma mark - SMAppService
 
 #import <ServiceManagement/ServiceManagement.h>

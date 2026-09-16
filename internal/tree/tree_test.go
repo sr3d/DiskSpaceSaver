@@ -109,7 +109,7 @@ func TestPruneReaggregates(t *testing.T) {
 func TestViewportSortsAndCollapses(t *testing.T) {
 	tr := build()
 	tr.Finalize()
-	v := tr.Viewport(tr.Root, 2, 0, false)
+	v := tr.Viewport(tr.Root, 2, 0, 0, false)
 	if len(v.Focus.Kids) != 3 {
 		t.Fatalf("focus has %d children, want 3", len(v.Focus.Kids))
 	}
@@ -124,7 +124,7 @@ func TestViewportSortsAndCollapses(t *testing.T) {
 	}
 
 	// A 10% floor folds "small" (1.8%) and "loose.bin" (8.9%) into "other".
-	v = tr.Viewport(tr.Root, 1, 0.10, false)
+	v = tr.Viewport(tr.Root, 1, 0.10, 0, false)
 	var other *VNode
 	for i := range v.Focus.Kids {
 		if v.Focus.Kids[i].Other > 0 {
@@ -150,7 +150,7 @@ func TestBreadcrumbs(t *testing.T) {
 	if len(anc) != 3 || anc[0].Name != "scan" || anc[1].Name != "big" || anc[2].Name != "x.bin" {
 		t.Errorf("Ancestors = %+v", anc)
 	}
-	v := tr.Viewport(tr.Lookup("/scan/big"), 1, 0, false)
+	v := tr.Viewport(tr.Lookup("/scan/big"), 1, 0, 0, false)
 	if len(v.Ancestors) != 1 || v.Ancestors[0].ID != tr.Root {
 		t.Errorf("viewport ancestors = %+v", v.Ancestors)
 	}
@@ -167,7 +167,7 @@ func TestTopChildrenMidScanUsesHeap(t *testing.T) {
 	}
 	tr.Apply(scanner.Frame{DirID: scanner.RootDirID, Entry: entries})
 	// Deliberately not Finalized: this exercises the mid-scan selection path.
-	kids := tr.Children(tr.Root, 0, 10)
+	kids := tr.Children(tr.Root, 0, 10, 0).Rows
 	if len(kids) != 10 {
 		t.Fatalf("got %d children", len(kids))
 	}
@@ -213,7 +213,7 @@ func TestArcCutoffIsRelativeToFocus(t *testing.T) {
 	tr.Finalize()
 
 	// 1% of the root total (~10,000 bytes) must exclude every child of "tiny".
-	v := tr.Viewport(tr.Root, 3, 0.01, false)
+	v := tr.Viewport(tr.Root, 3, 0.01, 0, false)
 	var tiny *VNode
 	for i := range v.Focus.Kids {
 		if v.Focus.Kids[i].Name == "tiny" {
@@ -231,8 +231,107 @@ func TestArcCutoffIsRelativeToFocus(t *testing.T) {
 
 	// Focusing on "tiny" makes the same children the whole circle, so now they
 	// must all be drawn.
-	v = tr.Viewport(tr.Lookup("/scan/tiny"), 2, 0.01, false)
+	v = tr.Viewport(tr.Lookup("/scan/tiny"), 2, 0.01, 0, false)
 	if len(v.Focus.Kids) != 4 {
 		t.Errorf("after focusing, got %d children, want 4 — cutoff did not rescale", len(v.Focus.Kids))
+	}
+}
+
+// The size filter hides entries from view without changing any total: a user
+// who hides small files still needs the folder's size to be the truth.
+func TestSizeFilterHidesWithoutChangingTotals(t *testing.T) {
+	tr := New("/scan")
+	entries := []scanner.Entry{
+		{Name: "huge.bin", Kind: scanner.KindFile, Alloc: 5_000_000},
+		{Name: "big.bin", Kind: scanner.KindFile, Alloc: 2_000_000},
+	}
+	// Forty small files: individually below the floor, together not trivial.
+	for i := 0; i < 40; i++ {
+		entries = append(entries, scanner.Entry{
+			Name: "small" + string(rune('a'+i%26)) + string(rune('a'+i/26)),
+			Kind: scanner.KindFile, Alloc: 1000,
+		})
+	}
+	tr.Apply(scanner.Frame{DirID: scanner.RootDirID, Entry: entries})
+	tr.Finalize()
+
+	root, _ := tr.Snapshot(tr.Root)
+	const wantTotal = 5_000_000 + 2_000_000 + 40*1000
+	if root.Alloc != wantTotal {
+		t.Fatalf("fixture total = %d, want %d", root.Alloc, wantTotal)
+	}
+
+	unfiltered := tr.Children(tr.Root, 0, 100, 0)
+	if len(unfiltered.Rows) != 42 || unfiltered.Hidden != 0 {
+		t.Fatalf("without a floor: %d rows, %d hidden", len(unfiltered.Rows), unfiltered.Hidden)
+	}
+
+	page := tr.Children(tr.Root, 0, 100, 1_000_000)
+	if len(page.Rows) != 2 {
+		t.Errorf("got %d rows above the floor, want 2", len(page.Rows))
+	}
+	if page.Hidden != 40 {
+		t.Errorf("hidden count = %d, want 40", page.Hidden)
+	}
+	if page.HiddenBytes != 40_000 {
+		t.Errorf("hidden bytes = %d, want 40000", page.HiddenBytes)
+	}
+	// The whole point: filtering is a view, not a deletion.
+	if after, _ := tr.Snapshot(tr.Root); after.Alloc != wantTotal {
+		t.Errorf("the filter changed the folder total: %d", after.Alloc)
+	}
+
+	// The chart folds what the floor removes into "other" rather than
+	// dropping it, so the ring still closes.
+	v := tr.Viewport(tr.Root, 1, 0, 1_000_000, false)
+	var other *VNode
+	var drawn int64
+	for i := range v.Focus.Kids {
+		k := &v.Focus.Kids[i]
+		if k.Other > 0 {
+			other = k
+		}
+		drawn += k.Size
+	}
+	if other == nil {
+		t.Fatal("no other wedge for the filtered entries")
+	}
+	if other.Other != 40 || other.Size != 40_000 {
+		t.Errorf("other wedge = %d items / %d bytes, want 40 / 40000", other.Other, other.Size)
+	}
+	if drawn != wantTotal {
+		t.Errorf("drawn arcs total %d, want %d — the ring would not close", drawn, wantTotal)
+	}
+}
+
+// Paging counts visible rows, not positions in the unfiltered list, or the
+// second page of a filtered view would start in the wrong place.
+func TestSizeFilterPagesOverVisibleRows(t *testing.T) {
+	tr := New("/scan")
+	var entries []scanner.Entry
+	for i := 0; i < 20; i++ {
+		size := int64(100) // below the floor
+		if i%2 == 0 {
+			size = 1_000_000 * int64(i+1) // above it
+		}
+		entries = append(entries, scanner.Entry{
+			Name: "f" + string(rune('a'+i)), Kind: scanner.KindFile, Alloc: size,
+		})
+	}
+	tr.Apply(scanner.Frame{DirID: scanner.RootDirID, Entry: entries})
+	tr.Finalize()
+
+	all := tr.Children(tr.Root, 0, 100, 500_000)
+	if all.Total != 10 || len(all.Rows) != 10 {
+		t.Fatalf("expected 10 visible rows, got total=%d rows=%d", all.Total, len(all.Rows))
+	}
+	second := tr.Children(tr.Root, 4, 3, 500_000)
+	if len(second.Rows) != 3 {
+		t.Fatalf("second page has %d rows, want 3", len(second.Rows))
+	}
+	for i, r := range second.Rows {
+		if r.ID != all.Rows[4+i].ID {
+			t.Errorf("page offset %d gave %q, want %q", i, r.Name, all.Rows[4+i].Name)
+		}
 	}
 }

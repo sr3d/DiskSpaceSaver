@@ -178,6 +178,10 @@ export function OpenStorageSettings() {
   return window['go']['main']['App']['OpenStorageSettings']();
 }
 
+export function PreviewItem(arg1, arg2) {
+  return window['go']['main']['App']['PreviewItem'](arg1, arg2);
+}
+
 export function QuickLook(arg1, arg2) {
   return window['go']['main']['App']['QuickLook'](arg1, arg2);
 }
@@ -198,8 +202,16 @@ export function ScanCacheBytes() {
   return window['go']['main']['App']['ScanCacheBytes']();
 }
 
+export function SetMinItemSize(arg1) {
+  return window['go']['main']['App']['SetMinItemSize'](arg1);
+}
+
 export function SetPrefs(arg1) {
   return window['go']['main']['App']['SetPrefs'](arg1);
+}
+
+export function SetSidebarWidth(arg1) {
+  return window['go']['main']['App']['SetSidebarWidth'](arg1);
 }
 
 export function SetUIScale(arg1) {

@@ -76,8 +76,8 @@ func TestCodecRestoresChildrenInSizeOrder(t *testing.T) {
 	src := buildWide(t)
 	dst := roundTrip(t, src)
 
-	before := src.Children(src.Lookup("/scan/wide"), 0, 300)
-	after := dst.Children(dst.Lookup("/scan/wide"), 0, 300)
+	before := src.Children(src.Lookup("/scan/wide"), 0, 300, 0).Rows
+	after := dst.Children(dst.Lookup("/scan/wide"), 0, 300, 0).Rows
 	if len(before) != len(after) {
 		t.Fatalf("child count: before %d, after %d", len(before), len(after))
 	}
@@ -100,7 +100,7 @@ func TestCodecRestoresChildrenInSizeOrder(t *testing.T) {
 // and keeps small ones, so the chart is not merely shuffled but wrong.
 func TestCodecViewportKeepsTheLargestArcs(t *testing.T) {
 	dst := roundTrip(t, buildWide(t))
-	v := dst.Viewport(dst.Lookup("/scan/wide"), 1, 0, false)
+	v := dst.Viewport(dst.Lookup("/scan/wide"), 1, 0, 0, false)
 
 	var largest int64
 	var other *VNode

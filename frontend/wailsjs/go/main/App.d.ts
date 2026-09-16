@@ -50,7 +50,7 @@ export function GetAppInfo():Promise<main.AppInfo>;
 
 export function GetChildCount(arg1:string,arg2:number):Promise<number>;
 
-export function GetChildren(arg1:string,arg2:number,arg3:number,arg4:number):Promise<Array<tree.NodeSummary>>;
+export function GetChildren(arg1:string,arg2:number,arg3:number,arg4:number):Promise<tree.ChildPage>;
 
 export function GetHelperStatus():Promise<main.HelperStatus>;
 
@@ -96,6 +96,8 @@ export function OpenLoginItemsSettings():Promise<void>;
 
 export function OpenStorageSettings():Promise<void>;
 
+export function PreviewItem(arg1:main.ItemRef,arg2:number):Promise<main.Preview>;
+
 export function QuickLook(arg1:Array<main.ItemRef>,arg2:number):Promise<void>;
 
 export function RemoveExclusion(arg1:string):Promise<prefs.Prefs>;
@@ -106,7 +108,11 @@ export function RevealInFinder(arg1:Array<main.ItemRef>):Promise<void>;
 
 export function ScanCacheBytes():Promise<number>;
 
+export function SetMinItemSize(arg1:number):Promise<prefs.Prefs>;
+
 export function SetPrefs(arg1:prefs.Prefs):Promise<prefs.Prefs>;
+
+export function SetSidebarWidth(arg1:number):Promise<prefs.Prefs>;
 
 export function SetUIScale(arg1:number):Promise<prefs.Prefs>;
 

@@ -37,6 +37,12 @@ type App struct {
 
 	dockMu   sync.Mutex
 	dockStop chan struct{}
+
+	cacheMu     sync.Mutex
+	cacheTimers map[string]*time.Timer
+
+	previewMu sync.Mutex
+	previews  map[string]string
 }
 
 // NewApp builds the application services.
@@ -50,6 +56,7 @@ func NewApp() *App {
 	}
 	a.scans = scanstore.New(a.emit)
 	a.upd = updater.New(p)
+	a.cacheTimers = map[string]*time.Timer{}
 	return a
 }
 
@@ -171,6 +178,7 @@ func (a *App) StartScan(path string, asAdmin bool) (string, error) {
 		Label:         a.labelFor(root),
 		SnapshotDepth: p.Rings,
 		MinFraction:   p.MinArcFraction,
+		MinSize:       p.MinItemSize,
 	}
 	if asAdmin {
 		opt.NewSource = func(r string) scanstore.Source {
@@ -210,6 +218,40 @@ func (a *App) cacheWhenDone(s *scanstore.Session) {
 	if err := a.cache.Save(cacheKey(s.Root, sum.VolumeUUID), s.Root, s.Tree); err != nil {
 		runtime.LogWarningf(a.ctx, "could not cache scan of %s: %v", s.Root, err)
 	}
+}
+
+// invalidateCache re-saves a scan's cache after the tree changed under it.
+//
+// Without this the cache still lists files the user has just deleted, and
+// reopening the volume shows them again — the cache is loaded and drawn
+// without a rescan, so a stale one is indistinguishable from the truth.
+//
+// The save is debounced: deleting a folder full of items fires one tree change
+// per item, and rewriting a multi-million node tree each time would cost more
+// than the scan did.
+func (a *App) invalidateCache(s *scanstore.Session) {
+	if !a.prefs.Get().UseCache || s == nil || s.Scanning() {
+		return
+	}
+	a.cacheMu.Lock()
+	defer a.cacheMu.Unlock()
+	if t, ok := a.cacheTimers[s.ID]; ok {
+		t.Stop()
+	}
+	a.cacheTimers[s.ID] = time.AfterFunc(3*time.Second, func() {
+		a.cacheMu.Lock()
+		delete(a.cacheTimers, s.ID)
+		a.cacheMu.Unlock()
+		if s.Scanning() {
+			return
+		}
+		key := cacheKey(s.Root, s.VolumeUUID)
+		if err := a.cache.Save(key, s.Root, s.Tree); err != nil {
+			// A cache we cannot refresh is worse than none: drop it so the
+			// next open rescans instead of showing deleted files.
+			a.cache.Delete(key)
+		}
+	})
 }
 
 func cacheKey(root, uuid string) string {
@@ -332,23 +374,41 @@ func (a *App) GetViewport(scanID string, nodeID uint32, depth int, minFraction f
 	if !ok {
 		return nil, errNoScan(scanID)
 	}
+	p := a.prefs.Get()
 	if depth <= 0 {
-		depth = a.prefs.Get().Rings
+		depth = p.Rings
 	}
 	if minFraction < 0 {
-		minFraction = a.prefs.Get().MinArcFraction
+		minFraction = p.MinArcFraction
 	}
-	v := s.Tree.Viewport(nodeID, depth, minFraction, s.Scanning())
+	v := s.Tree.Viewport(nodeID, depth, minFraction, p.MinItemSize, s.Scanning())
 	return &v, nil
 }
 
-// GetChildren returns a page of a node's children for the sidebar.
-func (a *App) GetChildren(scanID string, nodeID uint32, offset, limit int) ([]tree.NodeSummary, error) {
+// GetChildren returns a page of a node's children for the sidebar, along with
+// a count of what the size filter withheld.
+func (a *App) GetChildren(scanID string, nodeID uint32, offset, limit int) (*tree.ChildPage, error) {
 	s, ok := a.scans.Get(scanID)
 	if !ok {
 		return nil, errNoScan(scanID)
 	}
-	return s.Tree.Children(nodeID, offset, limit), nil
+	page := s.Tree.Children(nodeID, offset, limit, a.prefs.Get().MinItemSize)
+	return &page, nil
+}
+
+// SetMinItemSize sets the size below which entries are hidden from the chart
+// and the list, and returns the updated preferences.
+func (a *App) SetMinItemSize(bytes int64) (prefs.Prefs, error) {
+	p := a.prefs.Get()
+	p.MinItemSize = bytes
+	return a.SetPrefs(p)
+}
+
+// SetSidebarWidth remembers how wide the user dragged the list.
+func (a *App) SetSidebarWidth(width int) (prefs.Prefs, error) {
+	p := a.prefs.Get()
+	p.SidebarWidth = width
+	return a.SetPrefs(p)
 }
 
 // GetChildCount is how many children a node has, for sidebar paging.

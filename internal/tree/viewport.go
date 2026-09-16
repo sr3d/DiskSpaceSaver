@@ -59,7 +59,10 @@ const maxArcsPerRing = 200
 // contributing less than minFraction of the focus total are collapsed into a
 // single synthetic "other" arc, because an arc thinner than a pixel is noise
 // the user cannot click anyway.
-func (t *Tree) Viewport(focus uint32, depth int, minFraction float64, scanning bool) ViewportSlice {
+// minSize is an absolute byte floor the user sets; minFraction is the angular
+// floor that keeps sub-pixel arcs out of the payload. Both fold what they
+// exclude into the same "other" wedge, so nothing silently disappears.
+func (t *Tree) Viewport(focus uint32, depth int, minFraction float64, minSize int64, scanning bool) ViewportSlice {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
@@ -80,6 +83,9 @@ func (t *Tree) Viewport(focus uint32, depth int, minFraction float64, scanning b
 	var cutoff int64
 	if fn := t.node(focus); fn != nil && minFraction > 0 && fn.Alloc > 0 {
 		cutoff = int64(float64(fn.Alloc) * minFraction)
+	}
+	if minSize > cutoff {
+		cutoff = minSize
 	}
 
 	out := ViewportSlice{
@@ -236,47 +242,69 @@ func (t *Tree) topChildren(n *Node) []uint32 {
 	return h
 }
 
-// Children returns a page of a node's children for the sidebar list.
-func (t *Tree) Children(id uint32, offset, limit int) []NodeSummary {
+// ChildPage is a page of a node's children plus what the size floor withheld,
+// so the list can say how much it is not showing instead of quietly omitting
+// it.
+type ChildPage struct {
+	Rows        []NodeSummary `json:"rows"`
+	Total       int           `json:"total"`
+	Hidden      int           `json:"hidden"`
+	HiddenBytes int64         `json:"hiddenBytes"`
+}
+
+// Children returns a page of a node's children for the sidebar list. Entries
+// smaller than minSize are counted rather than returned.
+func (t *Tree) Children(id uint32, offset, limit int, minSize int64) ChildPage {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
+	page := ChildPage{Rows: []NodeSummary{}}
 	n := t.node(id)
 	if n == nil {
-		return []NodeSummary{}
+		return page
 	}
 	kids := t.topChildren(n)
 	total := n.Alloc
 	if offset < 0 {
 		offset = 0
 	}
-	if offset >= len(kids) {
-		return []NodeSummary{}
+	if limit <= 0 || limit > 5000 {
+		limit = 5000
 	}
-	if limit <= 0 || limit > 2000 {
-		limit = 2000
-	}
-	end := offset + limit
-	if end > len(kids) {
-		end = len(kids)
-	}
-	out := make([]NodeSummary, 0, end-offset)
-	for _, cid := range kids[offset:end] {
+
+	// The floor is applied before paging, so an offset means "the Nth visible
+	// row" rather than a position in a list the user cannot see.
+	seen := 0
+	for _, cid := range kids {
 		cn := t.node(cid)
 		if cn == nil || cn.Flags&FlagDeleted != 0 {
+			continue
+		}
+		if minSize > 0 && cn.Alloc < minSize {
+			page.Hidden++
+			page.HiddenBytes += cn.Alloc
+			continue
+		}
+		page.Total++
+		if seen < offset {
+			seen++
+			continue
+		}
+		seen++
+		if len(page.Rows) >= limit {
 			continue
 		}
 		var frac float64
 		if total > 0 {
 			frac = float64(cn.Alloc) / float64(total)
 		}
-		out = append(out, NodeSummary{
+		page.Rows = append(page.Rows, NodeSummary{
 			ID: cid, Name: cn.Name, Size: cn.Alloc, Logical: cn.Logical,
 			Kind: cn.Kind, Flags: cn.Flags, Files: cn.Files, Dirs: cn.Dirs,
 			Mtime: cn.Mtime, HasKids: t.liveKids(cn) > 0, Fraction: frac,
 			Err: cn.Err,
 		})
 	}
-	return out
+	return page
 }
 
 // ChildCount is the number of live children, for sidebar paging.

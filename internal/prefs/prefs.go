@@ -52,7 +52,19 @@ type Prefs struct {
 	Rings int `json:"rings"`
 	// UIScale magnifies the whole interface, including text. 1 is normal.
 	UIScale float64 `json:"uiScale"`
+	// MinItemSize hides entries smaller than this many bytes from the chart
+	// and the list. Zero shows everything. Hidden entries are still scanned
+	// and still counted in every total — this only controls what is drawn.
+	MinItemSize int64 `json:"minItemSize"`
+	// SidebarWidth is the width of the list beside the chart, in points.
+	SidebarWidth int `json:"sidebarWidth"`
 }
+
+// Sidebar width limits, in points.
+const (
+	MinSidebarWidth = 220
+	MaxSidebarWidth = 900
+)
 
 // UI scale limits. Below the minimum the traffic lights stop fitting the title
 // bar; above the maximum the sidebar columns no longer fit a small window.
@@ -118,6 +130,8 @@ func Defaults() Prefs {
 		MinArcFraction:       0.0008,
 		Rings:                5,
 		UIScale:              1,
+		MinItemSize:          0,
+		SidebarWidth:         350,
 	}
 }
 
@@ -200,6 +214,18 @@ func (p Prefs) normalized() Prefs {
 	}
 	if p.UIScale > MaxUIScale {
 		p.UIScale = MaxUIScale
+	}
+	if p.MinItemSize < 0 {
+		p.MinItemSize = 0
+	}
+	if p.SidebarWidth == 0 {
+		p.SidebarWidth = 350
+	}
+	if p.SidebarWidth < MinSidebarWidth {
+		p.SidebarWidth = MinSidebarWidth
+	}
+	if p.SidebarWidth > MaxSidebarWidth {
+		p.SidebarWidth = MaxSidebarWidth
 	}
 	return p
 }

@@ -10,6 +10,9 @@ import { Arc } from '../sunburst';
 import { reportError, useStore } from '../store';
 import { Breadcrumbs } from './Breadcrumbs';
 import { Sidebar } from './Sidebar';
+import { Preview } from './Preview';
+import { SizeFilter } from './SizeFilter';
+import { SidebarColumn } from './SidebarColumn';
 import { Sunburst } from './Sunburst';
 import { ContextMenu, MenuItem } from './ContextMenu';
 
@@ -33,10 +36,12 @@ export function ScanView({ scan, palette, dark }: Props) {
   const rings = prefs?.rings ?? 5;
   const uiScale = prefs?.uiScale ?? 1;
   const showHidden = prefs?.showHidden ?? true;
+  const minItemSize = prefs?.minItemSize ?? 0;
 
   const focus = tab?.focus ?? 1;
   const [slice, setSlice] = useState<ViewportSlice | undefined>(undefined);
   const [rows, setRows] = useState<NodeSummary[]>([]);
+  const [hidden, setHidden] = useState({ count: 0, bytes: 0 });
   const [trail, setTrail] = useState<NodeSummary[]>([]);
   const [menu, setMenu] = useState<{ x: number; y: number; id: number } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -60,19 +65,31 @@ export function ScanView({ scan, palette, dark }: Props) {
         ]);
         if (seq !== reqSeq.current) return; // a newer navigation won
         setSlice(v);
-        setRows(showHidden ? (kids ?? []) : (kids ?? []).filter((k) => (k.flags & 2) === 0));
+        const all = kids?.rows ?? [];
+        setRows(showHidden ? all : all.filter((k) => (k.flags & 2) === 0));
+        setHidden({ count: kids?.hidden ?? 0, bytes: kids?.hiddenBytes ?? 0 });
         setTrail(anc ?? []);
         patchTab(scan.id, { loading: false });
       } catch (err) {
         if (seq === reqSeq.current) reportError('Could not read that folder', err);
       }
     },
-    [scan.id, rings, showHidden, patchTab],
+    // minItemSize is applied on the Go side, so a change to it has to make the
+    // viewport and the list be fetched again — nothing here can filter after
+    // the fact, and the "other" wedge is computed from it too.
+    [scan.id, rings, showHidden, minItemSize, patchTab],
   );
 
+  // Reloads whenever the focus moves and whenever the scan's lifecycle moves.
+  //
+  // Depending on the scan:done event alone was a race: a small folder finishes
+  // in under a hundred milliseconds, before React has subscribed, and the view
+  // then sat empty for good because the initial load had caught a tree with
+  // nothing in it yet. Keying off the status makes the refresh happen whether
+  // or not the event was heard.
   useEffect(() => {
     load(focus);
-  }, [focus, load]);
+  }, [focus, load, scan.status, scan.finishedAt]);
 
   // While a scan runs the tree keeps changing under us. The snapshot event
   // carries the root viewport, which is only the right answer when the user is
@@ -85,7 +102,14 @@ export function ScanView({ scan, palette, dark }: Props) {
         if (!alive || payload?.scanID !== scan.id) return;
         if (focus === 1 && payload.viewport) {
           setSlice(payload.viewport);
-          api.getChildren(scan.id, 1, 0, 500).then((k) => alive && setRows(k)).catch(() => {});
+          api
+            .getChildren(scan.id, 1, 0, 500)
+            .then((k) => {
+              if (!alive) return;
+              setRows(k?.rows ?? []);
+              setHidden({ count: k?.hidden ?? 0, bytes: k?.hiddenBytes ?? 0 });
+            })
+            .catch(() => {});
         } else {
           load(focus);
         }
@@ -204,7 +228,10 @@ export function ScanView({ scan, palette, dark }: Props) {
         act(async () => {
           const id = await api.rescan(scan.id, focus);
           if (id !== scan.id) setActiveScan(id);
-          else toast('info', 'Rescanned', trail[trail.length - 1]?.name ?? '');
+          else {
+            await load(focus);
+            toast('info', 'Rescanned', trail[trail.length - 1]?.name ?? '');
+          }
         }, 'Could not rescan'),
       selectAll: () => {},
     };
@@ -286,14 +313,22 @@ export function ScanView({ scan, palette, dark }: Props) {
               )}
               <button
                 className="btn btn-quiet"
+                title={
+                  focus === 1
+                    ? 'Rescan this whole scan'
+                    : `Rescan ${trail[trail.length - 1]?.name ?? 'this folder'}`
+                }
                 onClick={() =>
                   act(async () => {
-                    const id = await api.rescan(scan.id, 1);
+                    // Rescans where the user is looking, not the whole volume:
+                    // they came here to re-check this folder.
+                    const id = await api.rescan(scan.id, focus);
                     if (id !== scan.id) setActiveScan(id);
+                    else await load(focus);
                   }, 'Could not rescan')
                 }
               >
-                Rescan
+                {focus === 1 ? 'Rescan' : 'Rescan Folder'}
               </button>
             </>
           )}
@@ -319,7 +354,17 @@ export function ScanView({ scan, palette, dark }: Props) {
           onContextMenu={(arc, x, y) => arc.id !== 0 && setMenu({ x, y, id: arc.id })}
         />
 
-        <Sidebar
+        <SidebarColumn scanID={scan.id} base2={base2} uiScale={uiScale}>
+          {selected > 0 && (
+            <Preview
+              scanID={scan.id}
+              nodeID={selected}
+              base2={base2}
+              onQuickLook={() => act(() => api.quickLook([ref(selected)], 0), 'Could not preview')}
+            />
+          )}
+          <SizeFilter base2={base2} hidden={hidden} />
+          <Sidebar
           rows={rows}
           total={focusTotal}
           palette={palette}
@@ -333,7 +378,8 @@ export function ScanView({ scan, palette, dark }: Props) {
           onSelect={(id) => patchTab(scan.id, { selected: id })}
           onOpen={navigate}
           onContextMenu={(id, x, y) => setMenu({ x, y, id })}
-        />
+          />
+        </SidebarColumn>
       </div>
 
       <div className="scanfoot">

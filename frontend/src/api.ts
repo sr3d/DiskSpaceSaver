@@ -148,6 +148,29 @@ export interface Prefs {
   minArcFraction: number;
   rings: number;
   uiScale: number;
+  minItemSize: number;
+  sidebarWidth: number;
+}
+
+/** A page of children plus what the size filter withheld. */
+export interface ChildPage {
+  rows: NodeSummary[];
+  total: number;
+  hidden: number;
+  hiddenBytes: number;
+}
+
+export interface Preview {
+  nodeID: number;
+  name: string;
+  path: string;
+  kind: number;
+  size: number;
+  mtime: number;
+  /** PNG data URI, empty when the system cannot render this file. */
+  image: string;
+  utType: string;
+  ext: string;
 }
 
 export interface SnapshotInfo {
@@ -244,8 +267,10 @@ export const api = {
     depth = PREF_DEFAULT,
     minFraction = PREF_DEFAULT,
   ): Promise<ViewportSlice> => App.GetViewport(scanID, nodeID, depth, minFraction) as any,
-  getChildren: (scanID: string, nodeID: number, offset: number, limit: number): Promise<NodeSummary[]> =>
+  getChildren: (scanID: string, nodeID: number, offset: number, limit: number): Promise<ChildPage> =>
     App.GetChildren(scanID, nodeID, offset, limit) as any,
+  previewItem: (ref: ItemRef, maxPoints = 320): Promise<Preview> =>
+    App.PreviewItem(ref as any, maxPoints) as any,
   getChildCount: (scanID: string, nodeID: number): Promise<number> => App.GetChildCount(scanID, nodeID),
   getAncestors: (scanID: string, nodeID: number): Promise<NodeSummary[]> =>
     App.GetAncestors(scanID, nodeID) as any,
@@ -285,6 +310,8 @@ export const api = {
   setPrefs: (p: Prefs): Promise<Prefs> => App.SetPrefs(p as any) as any,
   zoomUI: (direction: number, reset = false): Promise<Prefs> => App.ZoomUI(direction, reset) as any,
   setUIScale: (scale: number): Promise<Prefs> => App.SetUIScale(scale) as any,
+  setMinItemSize: (bytes: number): Promise<Prefs> => App.SetMinItemSize(bytes) as any,
+  setSidebarWidth: (width: number): Promise<Prefs> => App.SetSidebarWidth(width) as any,
   addExclusion: (path: string): Promise<Prefs> => App.AddExclusion(path) as any,
   removeExclusion: (path: string): Promise<Prefs> => App.RemoveExclusion(path) as any,
 

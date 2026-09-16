@@ -76,7 +76,7 @@ GB macOS reports as purgeable lands within **0.73%** of Finder's used figure.
 | `⌘I` · `⌘⇧R` · `⌘O` | Get Info · Show in Finder · Open |
 | `⌘D` | add to the collector |
 | `⌘⌫` / `⌘⌥⌫` | Trash · delete permanently |
-| `⌘T` · `⌘R` · `⌘L` · `⌘,` | new scan · rescan · collector · preferences |
+| `⌘T` · `⌘R` · `⌘L` · `⌘,` | new scan · rescan the current folder · collector · preferences |
 
 The interface scale runs from 75% to 200% and is remembered between launches;
 it is also in Preferences under Appearance. It scales layout rather than
@@ -106,6 +106,15 @@ marked and count zero, so the total matches the volume rather than the sum of
 the names.
 
 **Sizes are base 10 by default**, to match Finder.
+
+**The size filter hides, it does not exclude.** Entries below the threshold are
+still scanned and still counted in every total; the list says how many it is
+holding back and the chart folds them into the "other" wedge. A filter that
+quietly changed the numbers would defeat the point of the tool.
+
+**Rescan means the folder you are looking at**, not the whole volume. Its
+result replaces that subtree in place and re-aggregates upward, so the handles
+the UI is holding survive.
 
 **Snapshot sizes are not shown.** Local Time Machine snapshots share blocks
 with live files, so there is no single honest number for what they occupy and

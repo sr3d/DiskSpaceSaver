@@ -313,15 +313,108 @@ kbd {
 
 /* ---------------------------------------------------------------- sidebar */
 
-.sidebar {
-  /* Shrinkable rather than fixed: the side panels must give way before the
-     chart does, since the chart is the thing the app is for. */
-  flex: 0 1 350px;
+/* The resizable right-hand column: drag handle, then preview, filter and list
+   stacked inside it. Shrinkable rather than fixed, because the side panels
+   must give way before the chart does — the chart is what the app is for. */
+.sidecol {
+  position: relative;
+  flex: 0 1 auto;
   min-width: 210px;
-  border-left: 1px solid var(--line);
-  overflow-y: auto;
+  display: flex;
   background: var(--bg-raised);
+  border-left: 1px solid var(--line);
+}
+.sidecol-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.resizer {
+  flex: none;
+  width: 9px;
+  margin-left: -5px;          /* straddles the border so it is easy to grab */
+  cursor: col-resize;
+  background: transparent;
+  border: none;
+  padding: 0;
+  z-index: 5;
+}
+.resizer::after {
+  content: '';
+  display: block;
+  width: 1px;
+  height: 100%;
+  margin: 0 auto;
+  background: transparent;
+  transition: background 0.12s;
+}
+.resizer:hover::after, .resizer-active::after, .resizer:focus-visible::after {
+  background: var(--accent);
+  width: 2px;
+}
+.resizer:focus-visible { outline: none; }
+
+.sidebar {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: 6px 0;
+}
+
+/* ---------------------------------------------------------------- preview */
+
+.preview {
+  flex: none;
+  display: flex;
+  gap: 11px;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--line);
+  align-items: center;
+}
+.preview-image, .preview-blank {
+  flex: none;
+  width: 84px; height: 84px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-sunken);
+  display: grid; place-items: center;
+  overflow: hidden;
+  padding: 0;
+}
+.preview-image { cursor: zoom-in; }
+.preview-image img { max-width: 100%; max-height: 100%; display: block; object-fit: contain; }
+.preview-blank { color: var(--fg-faint); }
+.preview-ext {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+  max-width: 76px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.preview-loading { opacity: 0.5; }
+.preview-meta { min-width: 0; }
+.preview-name {
+  font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.preview-sub { color: var(--fg-dim); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.preview-path {
+  color: var(--fg-faint); font-size: 10.5px; margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ size filter */
+
+.sizefilter {
+  flex: none;
+  display: flex; align-items: center; gap: 9px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11.5px; color: var(--fg-dim);
+}
+.sizefilter label { display: flex; align-items: center; gap: 6px; }
+.sizefilter select { font-size: 11.5px; }
+.sizefilter-hidden {
+  margin-left: auto; color: var(--fg-faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 .row {
@@ -401,12 +494,14 @@ kbd {
    rather than squeezing it out sideways. */
 [data-layout='narrow'] .scanbody { flex-direction: column; }
 [data-layout='narrow'] .sunburst-wrap { flex: 1 1 58%; min-height: 200px; min-width: 0; }
-[data-layout='narrow'] .sidebar {
+[data-layout='narrow'] .sidecol {
   flex: 1 1 42%;
+  width: auto !important;   /* the drag width is meaningless when stacked */
   min-width: 0;
   border-left: none;
   border-top: 1px solid var(--line);
 }
+[data-layout='narrow'] .resizer { display: none; }
 [data-layout='narrow'] .volume-grid { grid-template-columns: 1fr; }
 .collector-head, .sheet-head {
   display: flex; align-items: center; justify-content: space-between;

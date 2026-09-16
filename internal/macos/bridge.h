@@ -38,6 +38,11 @@ char *dss_bundle_id(void);
 char *dss_team_id(void);
 bool dss_is_bundled(void);
 
+// Renders a preview thumbnail for a file as a PNG data URI, or NULL when the
+// system cannot represent it. Blocks until the thumbnail is ready, so call it
+// off the main thread.
+char *dss_thumbnail(const char *path, int max_points, double scale);
+
 // SMAppService, for the privileged helper. plist_name is the LaunchDaemons
 // plist filename inside the bundle, e.g. "com.sr3d.diskspacesaver.helper.plist".
 // Each returns NULL on success or an error string the caller must free.

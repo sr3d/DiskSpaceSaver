@@ -7,7 +7,7 @@ package macos
 
 /*
 #cgo CFLAGS: -x objective-c -fobjc-arc -Wno-deprecated-declarations
-#cgo LDFLAGS: -framework Cocoa -framework Quartz -framework Security -framework Foundation -framework ServiceManagement
+#cgo LDFLAGS: -framework Cocoa -framework Quartz -framework Security -framework Foundation -framework ServiceManagement -framework QuickLookThumbnailing
 #include <stdlib.h>
 #include "bridge.h"
 */
@@ -323,6 +323,23 @@ func FormatBytes(b int64, base2 bool) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %s", float64(b)/float64(div), suffix[exp])
+}
+
+// Thumbnail renders a preview of a file as a PNG data URI. It returns an empty
+// string when the system has no representation for that file, which is the
+// normal answer for most things and not an error.
+//
+// Blocks while the thumbnail is produced, so callers should not hold a lock.
+func Thumbnail(path string, maxPoints int, scale float64) string {
+	cp := C.CString(path)
+	defer C.free(unsafe.Pointer(cp))
+	if maxPoints <= 0 {
+		maxPoints = 512
+	}
+	if scale <= 0 {
+		scale = 2
+	}
+	return goString(C.dss_thumbnail(cp, C.int(maxPoints), C.double(scale)))
 }
 
 // HelperPlistName is the daemon plist embedded in Contents/Library/LaunchDaemons.

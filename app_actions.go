@@ -206,6 +206,7 @@ func (a *App) deleteItems(refs []ItemRef, toTrash bool) (Result, error) {
 	for id := range touched {
 		if s, ok := a.scans.Get(id); ok {
 			a.emit(scanstore.EventTree, map[string]any{"scanID": id, "summary": s.Summary()})
+			a.invalidateCache(s)
 		}
 	}
 	if len(res.Succeeded) > 0 {
@@ -255,6 +256,7 @@ func (a *App) Rescan(scanID string, nodeID uint32) (string, error) {
 		// Gone since the last scan: prune rather than fail.
 		s.Tree.Prune(nodeID)
 		a.emit(scanstore.EventTree, map[string]any{"scanID": scanID, "summary": s.Summary()})
+		a.invalidateCache(s)
 		return scanID, nil
 	}
 
@@ -276,6 +278,7 @@ func (a *App) Rescan(scanID string, nodeID uint32) (string, error) {
 	s.Tree.ReplaceSubtree(nodeID, subTree)
 
 	a.emit(scanstore.EventTree, map[string]any{"scanID": scanID, "summary": s.Summary()})
+	a.invalidateCache(s)
 	return scanID, nil
 }
 
@@ -346,4 +349,79 @@ func (a *App) CollectorDeleteAll(permanent bool) (Result, error) {
 		return a.DeletePermanently(refs)
 	}
 	return a.MoveToTrash(refs)
+}
+
+// ---------------------------------------------------------------- preview
+
+// Preview is a rendered look at one item, for the panel beside the list.
+type Preview struct {
+	NodeID uint32 `json:"nodeID"`
+	Name   string `json:"name"`
+	Path   string `json:"path"`
+	Kind   uint8  `json:"kind"`
+	Size   int64  `json:"size"`
+	Mtime  int64  `json:"mtime"`
+	// Image is a PNG data URI, empty when the system cannot render this file.
+	Image string `json:"image"`
+	// UTType is the file's type, shown when there is no image to show.
+	UTType string `json:"utType"`
+	Ext    string `json:"ext"`
+}
+
+// previewCache keeps recently rendered thumbnails so moving up and down the
+// list with the arrow keys does not re-render the same file repeatedly.
+const previewCacheMax = 48
+
+// PreviewItem renders a thumbnail for an item. Anything Finder can preview —
+// images, PDFs, video, documents — comes back with an image; everything else
+// comes back with the metadata only, which is still worth showing.
+func (a *App) PreviewItem(ref ItemRef, maxPoints int) (*Preview, error) {
+	s, path, err := a.resolve(ref)
+	if err != nil {
+		return nil, err
+	}
+	n, _ := s.Tree.Snapshot(ref.NodeID)
+
+	p := &Preview{
+		NodeID: ref.NodeID, Name: n.Name, Path: path, Kind: n.Kind,
+		Size: n.Alloc, Mtime: n.Mtime,
+		Ext: strings.TrimPrefix(strings.ToLower(filepath.Ext(n.Name)), "."),
+	}
+
+	key := fmt.Sprintf("%s#%d@%d", ref.ScanID, ref.NodeID, maxPoints)
+	if img, ok := a.previewFromCache(key); ok {
+		p.Image = img
+		return p, nil
+	}
+	// Directories have no meaningful thumbnail beyond a folder icon, and
+	// rendering one for every folder the user clicks costs a QuickLook round
+	// trip to say nothing.
+	if scanner.Kind(n.Kind) == scanner.KindDir {
+		return p, nil
+	}
+	p.Image = macos.Thumbnail(path, maxPoints, 2)
+	a.previewToCache(key, p.Image)
+	return p, nil
+}
+
+func (a *App) previewFromCache(key string) (string, bool) {
+	a.previewMu.Lock()
+	defer a.previewMu.Unlock()
+	v, ok := a.previews[key]
+	return v, ok
+}
+
+func (a *App) previewToCache(key, image string) {
+	a.previewMu.Lock()
+	defer a.previewMu.Unlock()
+	if a.previews == nil {
+		a.previews = map[string]string{}
+	}
+	if len(a.previews) >= previewCacheMax {
+		// A plain flush rather than a true LRU: the cache exists to make
+		// arrow-key browsing smooth, and at this size tracking recency costs
+		// more than an occasional re-render.
+		a.previews = map[string]string{}
+	}
+	a.previews[key] = image
 }

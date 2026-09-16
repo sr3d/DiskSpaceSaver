@@ -24,10 +24,10 @@ func TestBoundResultsNeverMarshalNullCollections(t *testing.T) {
 		name string
 		v    any
 	}{
-		{"viewport at root (no ancestors)", tr.Viewport(tr.Root, 5, 0, false)},
-		{"children of a leaf", tr.Children(tr.Lookup("/scan/a.bin"), 0, 10)},
-		{"children of a missing node", tr.Children(9999, 0, 10)},
-		{"children past the end", tr.Children(tr.Root, 500, 10)},
+		{"viewport at root (no ancestors)", tr.Viewport(tr.Root, 5, 0, 0, false)},
+		{"children of a leaf", tr.Children(tr.Lookup("/scan/a.bin"), 0, 10, 0)},
+		{"children of a missing node", tr.Children(9999, 0, 10, 0)},
+		{"children past the end", tr.Children(tr.Root, 500, 10, 0)},
 		{"ancestors of a missing node", tr.Ancestors(9999)},
 		{"empty batch result", newResult()},
 		{"cache miss", CachedScan{}},

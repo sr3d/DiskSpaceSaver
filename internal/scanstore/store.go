@@ -221,6 +221,8 @@ type StartOptions struct {
 	SnapshotDepth int
 	// MinFraction is the arc floor for live snapshots.
 	MinFraction float64
+	// MinSize is the user's absolute size floor for live snapshots.
+	MinSize int64
 }
 
 // Start creates a session and begins walking. It returns as soon as the
@@ -290,7 +292,7 @@ func (st *Store) run(ctx context.Context, s *Session, opt StartOptions) {
 			case <-ctx.Done():
 				return
 			case <-t.C:
-				v := s.Tree.Viewport(s.Tree.Root, depth, opt.MinFraction, true)
+				v := s.Tree.Viewport(s.Tree.Root, depth, opt.MinFraction, opt.MinSize, true)
 				st.emit(EventSnapshot, map[string]any{"scanID": s.ID, "viewport": v})
 			}
 		}

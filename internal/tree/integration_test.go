@@ -47,9 +47,9 @@ func TestScanIntoTreeUnderRace(t *testing.T) {
 				return
 			default:
 			}
-			v := tr.Viewport(tr.Root, 5, 0.001, true)
+			v := tr.Viewport(tr.Root, 5, 0.001, 0, true)
 			_ = v.Focus.Size
-			tr.Children(tr.Root, 0, 50)
+			tr.Children(tr.Root, 0, 50, 0)
 			tr.Path(tr.Root)
 		}
 	}()

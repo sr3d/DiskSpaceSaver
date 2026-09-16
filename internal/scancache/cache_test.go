@@ -69,7 +69,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 
 	// The chart draws a loaded cache without rescanning, so its children must
 	// come back largest-first.
-	kids := dst.Children(dst.Lookup("/scan/big"), 0, 40)
+	kids := dst.Children(dst.Lookup("/scan/big"), 0, 40, 0).Rows
 	if len(kids) != 40 {
 		t.Fatalf("got %d children after loading", len(kids))
 	}
