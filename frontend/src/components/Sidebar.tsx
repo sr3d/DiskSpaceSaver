@@ -7,6 +7,8 @@ import { arcColor, Palette } from '../colors';
 
 interface Props {
   rows: NodeSummary[];
+  checked: Set<number>;
+  onToggleCheck(id: number, shiftKey: boolean): void;
   total: number;
   palette: Palette;
   dark: boolean;
@@ -24,7 +26,7 @@ interface Props {
 export function Sidebar(props: Props) {
   const {
     rows, total, palette, dark, base2, hovered, selected, collected, loading,
-    onHover, onSelect, onOpen, onContextMenu,
+    checked, onToggleCheck, onHover, onSelect, onOpen, onContextMenu,
   } = props;
   const listRef = useRef<HTMLDivElement | null>(null);
 
@@ -77,6 +79,19 @@ export function Sidebar(props: Props) {
             }}
             title={`${r.name} — ${formatBytes(r.size, base2)}`}
           >
+            <input
+              type="checkbox"
+              className="row-check"
+              checked={checked.has(r.id)}
+              // The row underneath selects on click; ticking a box is a
+              // different intent and must not also move the selection.
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => {
+                const native = e.nativeEvent as MouseEvent;
+                onToggleCheck(r.id, native.shiftKey);
+              }}
+              aria-label={`Select ${r.name}`}
+            />
             <span className="row-swatch" style={{ background: style.fill }} aria-hidden />
             <span className="row-name">
               {r.name}

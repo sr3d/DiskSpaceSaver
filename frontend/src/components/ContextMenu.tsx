@@ -9,26 +9,38 @@ export interface MenuItem {
 }
 
 interface Props {
+  /** Viewport coordinates, as a mouse event reports them. */
   x: number;
   y: number;
+  /** Interface zoom, needed to place a fixed element inside a zoomed root. */
+  scale: number;
   items: MenuItem[];
   onClose(): void;
 }
 
-export function ContextMenu({ x, y, items, onClose }: Props) {
+export function ContextMenu({ x, y, scale, items, onClose }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState({ left: x, top: y });
+  const [pos, setPos] = useState({ left: x / (scale || 1), top: y / (scale || 1) });
 
-  // Keep the menu on screen when opened near an edge.
+  // A mouse event reports viewport pixels, but `position: fixed` inside a
+  // zoomed root is laid out in the zoomed coordinate space — so at 150% an
+  // unconverted click coordinate put the menu half again too far down and
+  // right, off screen entirely at the edges. Everything here works in layout
+  // space, including the bounds it is clamped against.
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+    const z = scale || 1;
     const r = el.getBoundingClientRect();
+    const menuW = r.width / z;
+    const menuH = r.height / z;
+    const viewW = window.innerWidth / z;
+    const viewH = window.innerHeight / z;
     setPos({
-      left: Math.min(x, window.innerWidth - r.width - 8),
-      top: Math.min(y, window.innerHeight - r.height - 8),
+      left: Math.max(4, Math.min(x / z, viewW - menuW - 8)),
+      top: Math.max(4, Math.min(y / z, viewH - menuH - 8)),
     });
-  }, [x, y]);
+  }, [x, y, scale]);
 
   useEffect(() => {
     const close = () => onClose();

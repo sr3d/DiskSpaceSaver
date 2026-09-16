@@ -117,7 +117,9 @@ export default function App() {
     // room" while the panels had none.
     const apply = () => {
       const effective = window.innerWidth / (uiScale || 1);
-      root.dataset.layout = effective < 660 ? 'narrow' : effective < 960 ? 'medium' : 'wide';
+      const tier = effective < 760 ? 'narrow' : effective < 1180 ? 'medium' : 'wide';
+      root.dataset.layout = tier;
+      useStore.getState().setLayout(tier);
     };
     apply();
     window.addEventListener('resize', apply);
@@ -227,10 +229,47 @@ export default function App() {
       if (meta && e.key === '0') {
         e.preventDefault();
         (window as any).__dssZoomUI?.(0, true);
+        return;
+      }
+      // The macOS convention for back and forward in a browsing view.
+      if (meta && e.key === '[') {
+        e.preventDefault();
+        acts.back?.();
+        return;
+      }
+      if (meta && e.key === ']') {
+        e.preventDefault();
+        acts.forward?.();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // The side buttons on a mouse. They arrive as buttons 3 and 4, and the
+  // default action in a web view is to navigate its own history — which here
+  // would leave the app entirely — so the press is swallowed as well as acted
+  // on. `auxclick` alone is not enough: the navigation is triggered by
+  // mousedown, before any click event exists.
+  useEffect(() => {
+    const swallow = (e: MouseEvent) => {
+      if (e.button === 3 || e.button === 4) e.preventDefault();
+    };
+    const onAux = (e: MouseEvent) => {
+      if (e.button !== 3 && e.button !== 4) return;
+      e.preventDefault();
+      const acts = (window as any).__dssActions ?? {};
+      if (e.button === 3) acts.back?.();
+      else acts.forward?.();
+    };
+    window.addEventListener('mousedown', swallow);
+    window.addEventListener('mouseup', onAux);
+    window.addEventListener('auxclick', swallow);
+    return () => {
+      window.removeEventListener('mousedown', swallow);
+      window.removeEventListener('mouseup', onAux);
+      window.removeEventListener('auxclick', swallow);
+    };
   }, []);
 
   useEffect(() => {

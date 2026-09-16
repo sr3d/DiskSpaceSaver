@@ -50,6 +50,12 @@ func (a *App) buildMenu() *menu.Menu {
 	item.AddText("Delete Permanently…", keys.Combo("backspace", keys.CmdOrCtrlKey, keys.OptionOrAltKey), cmd("deleteForever"))
 
 	view := m.AddSubmenu("View")
+	// Back and forward retrace where the user has been, which is not the same
+	// as walking up the tree — arriving somewhere from a breadcrumb or an arc
+	// should be retraceable too.
+	view.AddText("Back", keys.CmdOrCtrl("["), cmd("back"))
+	view.AddText("Forward", keys.CmdOrCtrl("]"), cmd("forward"))
+	view.AddSeparator()
 	// Chart navigation. "Zoom" here means moving through the tree, which is
 	// why the interface-size items below are named after size instead.
 	view.AddText("Zoom In", nil, cmd("zoomIn"))

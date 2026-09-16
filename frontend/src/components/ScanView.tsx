@@ -10,9 +10,10 @@ import { Arc } from '../sunburst';
 import { reportError, useStore } from '../store';
 import { Breadcrumbs } from './Breadcrumbs';
 import { Sidebar } from './Sidebar';
-import { Preview } from './Preview';
+import { Inspector } from './Inspector';
 import { SizeFilter } from './SizeFilter';
 import { SidebarColumn } from './SidebarColumn';
+import { BulkBar } from './BulkBar';
 import { Sunburst } from './Sunburst';
 import { ContextMenu, MenuItem } from './ContextMenu';
 
@@ -26,6 +27,11 @@ export function ScanView({ scan, palette, dark }: Props) {
   const prefs = useStore((s) => s.prefs);
   const tab = useStore((s) => s.tabs[scan.id]);
   const patchTab = useStore((s) => s.patchTab);
+  const navigateTo = useStore((s) => s.navigate);
+  const goBack = useStore((s) => s.goBack);
+  const goForward = useStore((s) => s.goForward);
+  const setChecked = useStore((s) => s.setChecked);
+  const layoutTier = useStore((s) => s.layout);
   const collector = useStore((s) => s.collector);
   const toast = useStore((s) => s.toast);
   const askConfirm = useStore((s) => s.askConfirm);
@@ -137,15 +143,59 @@ export function ScanView({ scan, palette, dark }: Props) {
   const selected = tab?.selected ?? 0;
   const selectedRow = rows.find((r) => r.id === selected);
 
-  const navigate = (id: number) => {
-    if (!id) return;
-    patchTab(scan.id, { focus: id, selected: 0, hovered: 0, loading: true });
+  // ---- bulk selection ----------------------------------------------------
+  const checked = tab?.checked ?? new Set<number>();
+  // Ticks are kept only for rows still on screen: the size filter or a rescan
+  // can remove a row, and acting on something the user can no longer see is
+  // exactly the wrong behaviour for a delete.
+  const checkedRows = rows.filter((r) => checked.has(r.id));
+  const checkedBytes = checkedRows.reduce((a, r) => a + r.size, 0);
+
+  const toggleCheck = (id: number, shiftKey: boolean) => {
+    const next = new Set(checked);
+    const anchor = tab?.lastChecked ?? 0;
+    if (shiftKey && anchor && anchor !== id) {
+      // Shift extends from the last box ticked, the way every file list does.
+      const a = rows.findIndex((r) => r.id === anchor);
+      const b = rows.findIndex((r) => r.id === id);
+      if (a >= 0 && b >= 0) {
+        const [lo, hi] = a < b ? [a, b] : [b, a];
+        const adding = !next.has(id);
+        for (let i = lo; i <= hi; i++) {
+          if (adding) next.add(rows[i].id);
+          else next.delete(rows[i].id);
+        }
+        setChecked(scan.id, next, id);
+        return;
+      }
+    }
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setChecked(scan.id, next, id);
   };
 
+  const clearChecks = () => setChecked(scan.id, new Set<number>(), 0);
+
+  /** What a delete or collect should act on: the ticked rows, or the selection. */
+  const bulkTargets = () =>
+    checkedRows.length > 0 ? checkedRows.map((r) => r.id) : selected ? [selected] : [];
+
+  const navigate = (id: number) => {
+    if (!id) return;
+    navigateTo(scan.id, id);
+  };
+
+  // Up one level, which is a different thing from going back: it walks the
+  // tree, not the trail.
   const zoomOut = () => {
     if (trail.length >= 2) navigate(trail[trail.length - 2].id);
     else setScreen('volumes');
   };
+
+  const back = () => {
+    if (!goBack(scan.id)) setScreen('volumes');
+  };
+  const forward = () => goForward(scan.id);
 
   const act = async (fn: () => Promise<unknown>, failMsg: string) => {
     setBusy(true);
@@ -176,9 +226,15 @@ export function ScanView({ scan, palette, dark }: Props) {
 
     if (prefs?.confirmTrash) {
       const names = ids.map((i) => rows.find((r) => r.id === i)?.name ?? 'item');
+      const bytes = ids.reduce((a, i) => a + (rows.find((r) => r.id === i)?.size ?? 0), 0);
       askConfirm({
-        title: ids.length === 1 ? `Move “${names[0]}” to the Trash?` : `Move ${ids.length} items to the Trash?`,
-        body: 'You can put items back from the Trash in Finder until you empty it.',
+        title:
+          ids.length === 1
+            ? `Move “${names[0]}” to the Trash?`
+            : `Move ${ids.length} items to the Trash?`,
+        body:
+          (ids.length > 1 ? `${formatBytes(bytes, base2)} in total. ` : '') +
+          'You can put items back from the Trash in Finder until you empty it.',
         confirmLabel: 'Move to Trash',
         onConfirm: run,
       });
@@ -188,9 +244,15 @@ export function ScanView({ scan, palette, dark }: Props) {
   const doDeleteForever = (ids: number[]) => {
     if (ids.length === 0) return;
     const names = ids.map((i) => rows.find((r) => r.id === i)?.name ?? 'item');
+    const bytes = ids.reduce((a, i) => a + (rows.find((r) => r.id === i)?.size ?? 0), 0);
     askConfirm({
-      title: ids.length === 1 ? `Delete “${names[0]}” permanently?` : `Delete ${ids.length} items permanently?`,
-      body: 'This bypasses the Trash. There is no way to get these back.',
+      title:
+        ids.length === 1
+          ? `Delete “${names[0]}” permanently?`
+          : `Delete ${ids.length} items permanently?`,
+      body:
+        (ids.length > 1 ? `${formatBytes(bytes, base2)} in total. ` : '') +
+        'This bypasses the Trash. There is no way to get these back.',
       confirmLabel: 'Delete Permanently',
       destructive: true,
       onConfirm: () =>
@@ -219,11 +281,22 @@ export function ScanView({ scan, palette, dark }: Props) {
           const p = await api.copyPath(ref(selected));
           toast('info', 'Path copied', middleTruncate(p, 64));
         }, 'Could not copy the path'),
-      collect: () => selected && act(() => api.collectorAdd([ref(selected)]), 'Could not collect'),
-      trash: () => doTrash(selected ? [selected] : []),
-      deleteForever: () => doDeleteForever(selected ? [selected] : []),
+      collect: () => {
+        const ids = bulkTargets();
+        if (ids.length) {
+          act(async () => {
+            await api.collectorAdd(ids.map(ref));
+            clearChecks();
+          }, 'Could not collect');
+        }
+      },
+      trash: () => doTrash(bulkTargets()),
+      deleteForever: () => doDeleteForever(bulkTargets()),
+      selectAll: () => setChecked(scan.id, new Set(rows.map((r) => r.id)), rows[0]?.id ?? 0),
       zoomIn: () => selectedRow?.hasKids && navigate(selected),
       zoomOut: () => zoomOut(),
+      back,
+      forward,
       rescan: () =>
         act(async () => {
           const id = await api.rescan(scan.id, focus);
@@ -233,7 +306,6 @@ export function ScanView({ scan, palette, dark }: Props) {
             toast('info', 'Rescanned', trail[trail.length - 1]?.name ?? '');
           }
         }, 'Could not rescan'),
-      selectAll: () => {},
     };
     (window as any).__dssActions = handlers;
     return () => {
@@ -281,10 +353,47 @@ export function ScanView({ scan, palette, dark }: Props) {
 
   const rootTotal = slice?.rootTotal ?? scan.bytes;
   const focusTotal = slice?.focus.size ?? 0;
+  const selectedRowFlags = selectedRow?.flags ?? 0;
+  const selectedFiles = selectedRow?.files ?? 0;
+
+  // A third column only earns its place when the window can spare it.
+  const inspectorInline = layoutTier !== 'wide';
+  const inspector = (
+    <Inspector
+      scanID={scan.id}
+      nodeID={selected}
+      base2={base2}
+      files={selectedFiles}
+      flags={selectedRowFlags}
+      inline={inspectorInline}
+      onQuickLook={() => selected && act(() => api.quickLook([ref(selected)], 0), 'Could not preview')}
+      onReveal={() => selected && act(() => api.reveal([ref(selected)]), 'Could not show in Finder')}
+    />
+  );
 
   return (
     <div className="scanview">
       <div className="scanbar">
+        <div className="navbtns">
+          <button
+            className="icon-btn"
+            onClick={back}
+            disabled={(tab?.historyAt ?? 0) <= 0}
+            title="Back (⌘[ or the mouse back button)"
+            aria-label="Back"
+          >
+            ‹
+          </button>
+          <button
+            className="icon-btn"
+            onClick={forward}
+            disabled={(tab?.historyAt ?? 0) >= ((tab?.history.length ?? 1) - 1)}
+            title="Forward (⌘])"
+            aria-label="Forward"
+          >
+            ›
+          </button>
+        </div>
         <Breadcrumbs trail={trail} base2={base2} onNavigate={navigate} onHome={() => setScreen('volumes')} />
         <div className="scanbar-right">
           {scan.status === 'scanning' ? (
@@ -355,17 +464,27 @@ export function ScanView({ scan, palette, dark }: Props) {
         />
 
         <SidebarColumn scanID={scan.id} base2={base2} uiScale={uiScale}>
-          {selected > 0 && (
-            <Preview
-              scanID={scan.id}
-              nodeID={selected}
-              base2={base2}
-              onQuickLook={() => act(() => api.quickLook([ref(selected)], 0), 'Could not preview')}
-            />
-          )}
+          {inspectorInline && inspector}
           <SizeFilter base2={base2} hidden={hidden} />
+          <BulkBar
+            count={checkedRows.length}
+            bytes={checkedBytes}
+            base2={base2}
+            allowPermanent={prefs?.allowPermanentDelete ?? false}
+            onCollect={() =>
+              act(async () => {
+                await api.collectorAdd(checkedRows.map((r) => ref(r.id)));
+                clearChecks();
+              }, 'Could not collect those items')
+            }
+            onTrash={() => doTrash(checkedRows.map((r) => r.id))}
+            onDeleteForever={() => doDeleteForever(checkedRows.map((r) => r.id))}
+            onClear={clearChecks}
+          />
           <Sidebar
           rows={rows}
+          checked={checked}
+          onToggleCheck={toggleCheck}
           total={focusTotal}
           palette={palette}
           dark={dark}
@@ -380,6 +499,7 @@ export function ScanView({ scan, palette, dark }: Props) {
           onContextMenu={(id, x, y) => setMenu({ x, y, id })}
           />
         </SidebarColumn>
+        {!inspectorInline && inspector}
       </div>
 
       <div className="scanfoot">
@@ -393,7 +513,13 @@ export function ScanView({ scan, palette, dark }: Props) {
       </div>
 
       {menu && (
-        <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.id)} onClose={() => setMenu(null)} />
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          scale={uiScale}
+          items={menuItems(menu.id)}
+          onClose={() => setMenu(null)}
+        />
       )}
     </div>
   );

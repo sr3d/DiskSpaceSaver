@@ -14,9 +14,25 @@ import (
 // scan cache.
 const AppDirName = "DiskSpaceSaver"
 
+// CurrentVersion is the preferences schema version. It exists so a changed
+// default can reach people who already have a preferences file: without it,
+// every existing install would keep the old value forever and only new users
+// would see the new behaviour.
+const CurrentVersion = 2
+
+// DefaultMinItemSize hides entries below 10 MB. Most volumes hold tens of
+// thousands of small files that no one is going to reclaim space by deleting,
+// and showing them buries the handful that matter.
+//
+// Base 10, because that is what the app shows by default: a threshold of
+// 10*1024*1024 would be labelled "10.5 MB", which reads like a typo.
+const DefaultMinItemSize = 10 * 1000 * 1000
+
 // Prefs is the full, versioned preference set. Every field is safe to send to
 // the frontend.
 type Prefs struct {
+	// Version is the schema version this file was written with.
+	Version int `json:"version"`
 	// Base2 switches sizes to KiB/MiB/GiB. Off by default so numbers match
 	// Finder, which counts in base 10.
 	Base2 bool `json:"base2"`
@@ -114,6 +130,7 @@ func abs(f float64) float64 {
 // Defaults returns the shipped configuration.
 func Defaults() Prefs {
 	return Prefs{
+		Version:              CurrentVersion,
 		Base2:                false,
 		Theme:                "system",
 		ColorScheme:          "spectrum",
@@ -130,7 +147,7 @@ func Defaults() Prefs {
 		MinArcFraction:       0.0008,
 		Rings:                5,
 		UIScale:              1,
-		MinItemSize:          0,
+		MinItemSize:          DefaultMinItemSize,
 		SidebarWidth:         350,
 	}
 }
@@ -170,17 +187,44 @@ func Load() *Store {
 		_ = s.save()
 		return s
 	}
+	// The file's own version has to be read before defaults are applied.
+	// Unmarshalling into a struct that already holds the defaults leaves a
+	// missing field at its default value, so an old file without a version
+	// would read as current and never be migrated.
+	var stamp struct {
+		Version int `json:"version"`
+	}
+	_ = json.Unmarshal(b, &stamp)
+
 	p := Defaults()
 	if err := json.Unmarshal(b, &p); err != nil {
 		_ = s.save()
 		return s
 	}
-	s.p = p.normalized()
+	p.Version = stamp.Version
+	s.p = p.migrated().normalized()
+	if s.p.Version != CurrentVersion {
+		s.p.Version = CurrentVersion
+		_ = s.save()
+	}
 	if s.p.InstallID == "" {
 		s.p.InstallID = uuid.NewString()
 		_ = s.save()
 	}
 	return s
+}
+
+// migrated brings a preferences file forward to the current schema.
+func (p Prefs) migrated() Prefs {
+	// v2 introduced the size filter. A file written before it has no opinion
+	// about the setting, so it takes the new default rather than being pinned
+	// to "show everything" for the life of the install. Someone who has
+	// actually chosen a value keeps it.
+	if p.Version < 2 && p.MinItemSize == 0 {
+		p.MinItemSize = DefaultMinItemSize
+	}
+	p.Version = CurrentVersion
+	return p
 }
 
 func (p Prefs) normalized() Prefs {

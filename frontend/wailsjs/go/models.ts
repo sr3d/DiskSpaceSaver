@@ -358,6 +358,7 @@ export namespace main {
 export namespace prefs {
 	
 	export class Prefs {
+	    version: number;
 	    base2: boolean;
 	    theme: string;
 	    colorScheme: string;
@@ -383,6 +384,7 @@ export namespace prefs {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
 	        this.base2 = source["base2"];
 	        this.theme = source["theme"];
 	        this.colorScheme = source["colorScheme"];

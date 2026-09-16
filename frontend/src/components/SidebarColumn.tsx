@@ -83,8 +83,14 @@ export function SidebarColumn({ uiScale, children }: Props) {
     api.setSidebarWidth(next).then(setPrefs).catch(() => {});
   };
 
+  // Below this the decorative bar column costs more than it gives: the name is
+  // what the user is reading, and the percentage and size still carry the
+  // proportion. Driven from the measured width rather than a container query,
+  // which the WebView on early macOS 13 does not support.
+  const tight = width < 430;
+
   return (
-    <div className="sidecol" style={{ width }}>
+    <div className={'sidecol' + (tight ? ' sidecol-tight' : '')} style={{ width }}>
       <div
         className={'resizer' + (dragging ? ' resizer-active' : '')}
         onMouseDown={begin}

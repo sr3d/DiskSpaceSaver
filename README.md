@@ -71,9 +71,11 @@ GB macOS reports as purgeable lands within **0.73%** of Finder's used figure.
 | | |
 |---|---|
 | `⌘=` / `⌘-` / `⌘0` | interface bigger, smaller, back to normal |
-| `Return` / `⌘↑` | zoom into the selected folder, zoom back out |
+| `⌘[` / `⌘]` | back and forward through folders you have visited (also the mouse side buttons) |
+| `Return` / `⌘↑` | zoom into the selected folder, up one level |
 | `Space` | Quick Look |
 | `⌘I` · `⌘⇧R` · `⌘O` | Get Info · Show in Finder · Open |
+| `⌘A` | tick every row in this folder |
 | `⌘D` | add to the collector |
 | `⌘⌫` / `⌘⌥⌫` | Trash · delete permanently |
 | `⌘T` · `⌘R` · `⌘L` · `⌘,` | new scan · rescan the current folder · collector · preferences |
@@ -110,7 +112,15 @@ the names.
 **The size filter hides, it does not exclude.** Entries below the threshold are
 still scanned and still counted in every total; the list says how many it is
 holding back and the chart folds them into the "other" wedge. A filter that
-quietly changed the numbers would defeat the point of the tool.
+quietly changed the numbers would defeat the point of the tool. It starts at
+10 MB, because most volumes hold tens of thousands of small files that nobody
+is going to reclaim space by deleting, and showing them buries the few that
+matter.
+
+**Back is not the same as up.** `⌘[` retraces the folders you have visited,
+including jumps made from a breadcrumb or an arc; `⌘↑` walks one level up the
+tree. Ticked rows are cleared whenever the folder changes, so a bulk delete can
+only ever act on what is currently on screen.
 
 **Rescan means the folder you are looking at**, not the whole volume. Its
 result replaces that subtree in place and re-aggregates upward, so the handles

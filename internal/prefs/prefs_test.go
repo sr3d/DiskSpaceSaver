@@ -1,6 +1,10 @@
 package prefs
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestNextUIScaleWalksTheLadder(t *testing.T) {
 	if got := NextUIScale(1.0, +1); got != 1.15 {
@@ -42,5 +46,69 @@ func TestNormalizeFillsAndClampsScale(t *testing.T) {
 	}
 	if got := (Prefs{UIScale: 99}).normalized().UIScale; got != MaxUIScale {
 		t.Errorf("a huge scale became %v, want %v", got, MaxUIScale)
+	}
+}
+
+// A changed default has to reach people who already have a preferences file,
+// or only new installs ever see it.
+func TestMigrationAppliesTheSizeFilterDefault(t *testing.T) {
+	// A file written before the filter existed: no version, no opinion.
+	old := Prefs{Base2: true, Rings: 6}
+	got := old.migrated().normalized()
+	if got.MinItemSize != DefaultMinItemSize {
+		t.Errorf("minItemSize after migration = %d, want %d", got.MinItemSize, DefaultMinItemSize)
+	}
+	if got.Version != CurrentVersion {
+		t.Errorf("version after migration = %d, want %d", got.Version, CurrentVersion)
+	}
+	if !got.Base2 || got.Rings != 6 {
+		t.Error("migration discarded settings it should have kept")
+	}
+
+	// Someone who has chosen a value keeps it, including a deliberate zero
+	// once they are already on the current schema.
+	chosen := Prefs{Version: CurrentVersion, MinItemSize: 0}
+	if got := chosen.migrated().normalized(); got.MinItemSize != 0 {
+		t.Errorf("a deliberate 'show everything' was overwritten with %d", got.MinItemSize)
+	}
+	custom := Prefs{MinItemSize: 1234}
+	if got := custom.migrated().normalized(); got.MinItemSize != 1234 {
+		t.Errorf("an existing choice was overwritten with %d", got.MinItemSize)
+	}
+}
+
+// Exercises migration through Load, which is where it actually has to work:
+// the struct is filled with defaults before the file is decoded, so a version
+// read from the decoded struct would always look current.
+func TestLoadMigratesAFileWithoutAVersion(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, "Library", "Application Support", AppDirName)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A file as written before the size filter existed.
+	old := `{"base2":true,"theme":"dark","rings":7,"minItemSize":0}`
+	if err := os.WriteFile(filepath.Join(dir, "prefs.json"), []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := Load().Get()
+	if got.MinItemSize != DefaultMinItemSize {
+		t.Errorf("minItemSize after Load = %d, want %d", got.MinItemSize, DefaultMinItemSize)
+	}
+	if got.Version != CurrentVersion {
+		t.Errorf("version after Load = %d, want %d", got.Version, CurrentVersion)
+	}
+	if !got.Base2 || got.Theme != "dark" || got.Rings != 7 {
+		t.Errorf("Load discarded existing settings: %+v", got)
+	}
+
+	// Loading again must not undo a later deliberate choice.
+	if _, err := Load().Set(func() Prefs { p := got; p.MinItemSize = 0; return p }()); err != nil {
+		t.Fatal(err)
+	}
+	if again := Load().Get(); again.MinItemSize != 0 {
+		t.Errorf("a deliberate 'show everything' was migrated away again: %d", again.MinItemSize)
 	}
 }

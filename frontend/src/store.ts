@@ -33,6 +33,17 @@ export interface TabState {
   hovered: number;
   viewport?: ViewportSlice;
   loading: boolean;
+  /**
+   * Where this tab has been. Going "back" means the folder previously looked
+   * at, which is not the same as the parent folder: arriving somewhere from a
+   * breadcrumb, an arc or a search should all be retraceable.
+   */
+  history: number[];
+  historyAt: number;
+  /** Rows ticked for a bulk action. Cleared whenever the folder changes. */
+  checked: Set<number>;
+  /** Anchor for shift-click range selection. */
+  lastChecked: number;
 }
 
 export interface Confirm {
@@ -61,6 +72,8 @@ interface State {
   hiddenSpaceMount: string | null;
   confirm: Confirm | null;
   theme: 'light' | 'dark';
+  /** How much room the layout has, once interface zoom is accounted for. */
+  layout: 'wide' | 'medium' | 'narrow';
 
   setReady(v: boolean): void;
   setScreen(s: Screen): void;
@@ -70,6 +83,10 @@ interface State {
   setActiveScan(id: string | null): void;
   tab(id: string): TabState;
   patchTab(id: string, patch: Partial<TabState>): void;
+  navigate(id: string, focus: number): void;
+  setChecked(id: string, checked: Set<number>, last?: number): void;
+  goBack(id: string): boolean;
+  goForward(id: string): boolean;
   dropTab(id: string): void;
   setCollector(c: CollectorState): void;
   setPrefs(p: Prefs): void;
@@ -77,6 +94,7 @@ interface State {
   setUpdate(u: UpdateState): void;
   setFDA(f: FDAStatus): void;
   setTheme(t: 'light' | 'dark'): void;
+  setLayout(l: 'wide' | 'medium' | 'narrow'): void;
   toast(kind: Toast['kind'], text: string, detail?: string): void;
   dismissToast(id: number): void;
   setShowPrefs(v: boolean): void;
@@ -90,6 +108,10 @@ export const emptyTab = (): TabState => ({
   selected: 0,
   hovered: 0,
   loading: true,
+  history: [1],
+  historyAt: 0,
+  checked: new Set<number>(),
+  lastChecked: 0,
 });
 
 let toastSeq = 1;
@@ -112,6 +134,7 @@ export const useStore = create<State>((set, get) => ({
   hiddenSpaceMount: null,
   confirm: null,
   theme: 'dark',
+  layout: 'wide',
 
   setReady: (v) => set({ ready: v }),
   setScreen: (screen) => set({ screen }),
@@ -152,6 +175,78 @@ export const useStore = create<State>((set, get) => ({
       tabs: { ...st.tabs, [id]: { ...(st.tabs[id] ?? emptyTab()), ...patch } },
     })),
 
+  // navigate records a move. Going somewhere after stepping back discards the
+  // forward entries, which is what every back button does.
+  navigate: (id, focus) =>
+    set((st) => {
+      const tab = st.tabs[id] ?? emptyTab();
+      if (tab.focus === focus) return {};
+      const history = [...tab.history.slice(0, tab.historyAt + 1), focus];
+      // A tab left open for a long session should not grow without bound.
+      const trimmed = history.slice(-100);
+      return {
+        tabs: {
+          ...st.tabs,
+          [id]: {
+            ...tab,
+            focus,
+            selected: 0,
+            hovered: 0,
+            loading: true,
+            checked: new Set<number>(),
+            lastChecked: 0,
+            history: trimmed,
+            historyAt: trimmed.length - 1,
+          },
+        },
+      };
+    }),
+
+  setChecked: (id, checked, last) =>
+    set((st) => {
+      const tab = st.tabs[id] ?? emptyTab();
+      return {
+        tabs: {
+          ...st.tabs,
+          [id]: { ...tab, checked, lastChecked: last ?? tab.lastChecked },
+        },
+      };
+    }),
+
+  goBack: (id) => {
+    const tab = get().tabs[id];
+    if (!tab || tab.historyAt <= 0) return false;
+    const at = tab.historyAt - 1;
+    set((st) => ({
+      tabs: {
+        ...st.tabs,
+        [id]: {
+          ...tab, focus: tab.history[at], historyAt: at,
+          selected: 0, hovered: 0, loading: true,
+          checked: new Set<number>(), lastChecked: 0,
+        },
+      },
+    }));
+    return true;
+  },
+
+  goForward: (id) => {
+    const tab = get().tabs[id];
+    if (!tab || tab.historyAt >= tab.history.length - 1) return false;
+    const at = tab.historyAt + 1;
+    set((st) => ({
+      tabs: {
+        ...st.tabs,
+        [id]: {
+          ...tab, focus: tab.history[at], historyAt: at,
+          selected: 0, hovered: 0, loading: true,
+          checked: new Set<number>(), lastChecked: 0,
+        },
+      },
+    }));
+    return true;
+  },
+
   dropTab: (id) =>
     set((st) => {
       const tabs = { ...st.tabs };
@@ -165,6 +260,7 @@ export const useStore = create<State>((set, get) => ({
   setUpdate: (update) => set({ update }),
   setFDA: (fda) => set({ fda }),
   setTheme: (theme) => set({ theme }),
+  setLayout: (layout) => set({ layout }),
 
   toast: (kind, text, detail) =>
     set((st) => {
