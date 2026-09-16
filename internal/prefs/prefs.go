@@ -50,6 +50,53 @@ type Prefs struct {
 	MinArcFraction float64 `json:"minArcFraction"`
 	// Rings is how many levels the sunburst draws from the focus.
 	Rings int `json:"rings"`
+	// UIScale magnifies the whole interface, including text. 1 is normal.
+	UIScale float64 `json:"uiScale"`
+}
+
+// UI scale limits. Below the minimum the traffic lights stop fitting the title
+// bar; above the maximum the sidebar columns no longer fit a small window.
+const (
+	MinUIScale = 0.75
+	MaxUIScale = 2.0
+)
+
+// UIScaleSteps are the stops Zoom In and Zoom Out move between, chosen so each
+// press is a visible change without being a jump.
+var UIScaleSteps = []float64{0.75, 0.85, 1.0, 1.15, 1.3, 1.5, 1.75, 2.0}
+
+// NextUIScale returns the neighbouring stop in the given direction. Anything
+// off-ladder (a hand-edited preferences file) snaps to the nearest stop first,
+// so the ladder is always escapable.
+func NextUIScale(current float64, direction int) float64 {
+	nearest, best := 0, 1e9
+	for i, s := range UIScaleSteps {
+		if d := abs(s - current); d < best {
+			nearest, best = i, d
+		}
+	}
+	// Already exactly on a stop: move off it. Otherwise snapping is the move.
+	if best < 1e-6 {
+		nearest += direction
+	} else if direction > 0 && UIScaleSteps[nearest] < current {
+		nearest++
+	} else if direction < 0 && UIScaleSteps[nearest] > current {
+		nearest--
+	}
+	if nearest < 0 {
+		nearest = 0
+	}
+	if nearest >= len(UIScaleSteps) {
+		nearest = len(UIScaleSteps) - 1
+	}
+	return UIScaleSteps[nearest]
+}
+
+func abs(f float64) float64 {
+	if f < 0 {
+		return -f
+	}
+	return f
 }
 
 // Defaults returns the shipped configuration.
@@ -70,6 +117,7 @@ func Defaults() Prefs {
 		UseBulkScan:          true,
 		MinArcFraction:       0.0008,
 		Rings:                5,
+		UIScale:              1,
 	}
 }
 
@@ -141,6 +189,17 @@ func (p Prefs) normalized() Prefs {
 	}
 	if p.Exclusions == nil {
 		p.Exclusions = []string{}
+	}
+	// A zero here means a preferences file written before this setting
+	// existed, not a request for an invisible interface.
+	if p.UIScale == 0 {
+		p.UIScale = 1
+	}
+	if p.UIScale < MinUIScale {
+		p.UIScale = MinUIScale
+	}
+	if p.UIScale > MaxUIScale {
+		p.UIScale = MaxUIScale
 	}
 	return p
 }

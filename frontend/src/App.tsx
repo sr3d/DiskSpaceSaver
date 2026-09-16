@@ -99,6 +99,31 @@ export default function App() {
     document.documentElement.dataset.theme = s.theme;
   }, [s.theme]);
 
+  // Interface zoom. CSS `zoom` scales layout rather than painting over it, so
+  // text stays sharp and everything reflows at the new size — unlike a
+  // transform, which would leave the element's box at its old dimensions.
+  // --ui-scale is published alongside so the few pieces that must keep their
+  // physical size, notably the gap left for the window's traffic lights, can
+  // divide it back out.
+  const uiScale = prefs?.uiScale ?? 1;
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.zoom = String(uiScale);
+    root.style.setProperty('--ui-scale', String(uiScale));
+
+    // Breakpoints have to be measured in the space the layout actually gets,
+    // which is the window divided by the scale. A media query would only see
+    // the window, so at 200% on a large display it would report "plenty of
+    // room" while the panels had none.
+    const apply = () => {
+      const effective = window.innerWidth / (uiScale || 1);
+      root.dataset.layout = effective < 660 ? 'narrow' : effective < 960 ? 'medium' : 'wide';
+    };
+    apply();
+    window.addEventListener('resize', apply);
+    return () => window.removeEventListener('resize', apply);
+  }, [uiScale]);
+
   // ---- actions -----------------------------------------------------------
   const startScan = useCallback(async (path: string, asAdmin: boolean) => {
     try {
@@ -120,6 +145,16 @@ export default function App() {
       reportError('Could not open the folder picker', err);
     }
   }, [startScan]);
+
+  // The menu, the keyboard and the Preferences control all step the same
+  // ladder, which lives in Go, so they cannot disagree about what comes next.
+  const zoomUI = useCallback(async (direction: number, reset = false) => {
+    try {
+      useStore.getState().setPrefs(await api.zoomUI(direction, reset));
+    } catch (err) {
+      reportError('Could not change the interface size', err);
+    }
+  }, []);
 
   const closeScan = useCallback(async (id: string) => {
     try {
@@ -174,11 +209,36 @@ export default function App() {
       if (meta && e.key.toLowerCase() === 'd') {
         e.preventDefault();
         acts.collect?.();
+        return;
+      }
+      // Interface size. In the packaged app the menu takes these first and
+      // they never reach here; this covers the shifted "+" that the menu does
+      // not claim, and the browser during development.
+      if (meta && (e.key === '=' || e.key === '+')) {
+        e.preventDefault();
+        (window as any).__dssZoomUI?.(+1);
+        return;
+      }
+      if (meta && (e.key === '-' || e.key === '_')) {
+        e.preventDefault();
+        (window as any).__dssZoomUI?.(-1);
+        return;
+      }
+      if (meta && e.key === '0') {
+        e.preventDefault();
+        (window as any).__dssZoomUI?.(0, true);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  useEffect(() => {
+    (window as any).__dssZoomUI = zoomUI;
+    return () => {
+      delete (window as any).__dssZoomUI;
+    };
+  }, [zoomUI]);
 
   // Native menu commands route to the same action table the keyboard uses.
   useEffect(() => {
@@ -204,6 +264,15 @@ export default function App() {
         case 'showUpdates':
           st.setShowPrefs(true);
           break;
+        case 'uiBigger':
+          zoomUI(+1);
+          break;
+        case 'uiSmaller':
+          zoomUI(-1);
+          break;
+        case 'uiReset':
+          zoomUI(0, true);
+          break;
         case 'toggleCollector':
           st.setShowCollector(!st.showCollector);
           break;
@@ -217,7 +286,7 @@ export default function App() {
           acts[cmd]?.();
       }
     });
-  }, [chooseFolder, closeScan]);
+  }, [chooseFolder, closeScan, zoomUI]);
 
   const activeScan = s.scans.find((x) => x.id === s.activeScan) ?? null;
 

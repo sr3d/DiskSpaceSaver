@@ -423,6 +423,26 @@ func (a *App) SetPrefs(p prefs.Prefs) (prefs.Prefs, error) {
 	return out, nil
 }
 
+// ZoomUI moves the interface scale one stop, or back to normal when reset is
+// set. The ladder lives in Go so the menu, the keyboard and the Preferences
+// control cannot drift apart.
+func (a *App) ZoomUI(direction int, reset bool) (prefs.Prefs, error) {
+	p := a.prefs.Get()
+	if reset {
+		p.UIScale = 1
+	} else {
+		p.UIScale = prefs.NextUIScale(p.UIScale, direction)
+	}
+	return a.SetPrefs(p)
+}
+
+// SetUIScale sets the interface scale directly, for the Preferences control.
+func (a *App) SetUIScale(scale float64) (prefs.Prefs, error) {
+	p := a.prefs.Get()
+	p.UIScale = scale
+	return a.SetPrefs(p)
+}
+
 // AddExclusion adds a folder to the never-scan list.
 func (a *App) AddExclusion(path string) (prefs.Prefs, error) {
 	p := a.prefs.Get()

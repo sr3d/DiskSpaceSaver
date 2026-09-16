@@ -147,6 +147,7 @@ export interface Prefs {
   useBulkScan: boolean;
   minArcFraction: number;
   rings: number;
+  uiScale: number;
 }
 
 export interface SnapshotInfo {
@@ -282,6 +283,8 @@ export const api = {
 
   getPrefs: (): Promise<Prefs> => App.GetPrefs() as any,
   setPrefs: (p: Prefs): Promise<Prefs> => App.SetPrefs(p as any) as any,
+  zoomUI: (direction: number, reset = false): Promise<Prefs> => App.ZoomUI(direction, reset) as any,
+  setUIScale: (scale: number): Promise<Prefs> => App.SetUIScale(scale) as any,
   addExclusion: (path: string): Promise<Prefs> => App.AddExclusion(path) as any,
   removeExclusion: (path: string): Promise<Prefs> => App.RemoveExclusion(path) as any,
 

@@ -31,6 +31,7 @@ export function ScanView({ scan, palette, dark }: Props) {
 
   const base2 = prefs?.base2 ?? false;
   const rings = prefs?.rings ?? 5;
+  const uiScale = prefs?.uiScale ?? 1;
   const showHidden = prefs?.showHidden ?? true;
 
   const focus = tab?.focus ?? 1;
@@ -307,6 +308,7 @@ export function ScanView({ scan, palette, dark }: Props) {
           dark={dark}
           base2={base2}
           rings={rings}
+          uiScale={uiScale}
           hovered={tab?.hovered ?? 0}
           selected={selected}
           scanning={scan.status === 'scanning'}

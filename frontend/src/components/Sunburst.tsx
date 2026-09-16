@@ -1,7 +1,7 @@
 // The radial chart. The canvas is drawn imperatively from a layout held in a
 // ref; React only owns the surrounding chrome, so a 250ms scan snapshot never
 // costs a reconciliation.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { ViewportSlice } from '../api';
 import { arcColor, centreColor, Palette } from '../colors';
 import { formatBytes, formatCount, formatPercent } from '../format';
@@ -30,6 +30,7 @@ interface Props {
   dark: boolean;
   base2: boolean;
   rings: number;
+  uiScale: number;
   hovered: number;
   selected: number;
   scanning: boolean;
@@ -42,14 +43,13 @@ interface Props {
 
 export function Sunburst(props: Props) {
   const {
-    slice, rootLabel, palette, dark, base2, rings,
+    slice, rootLabel, palette, dark, base2, rings, uiScale,
     hovered, selected, scanning,
     onHover, onSelect, onZoom, onZoomOut, onContextMenu,
   } = props;
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
-  const [size, setSize] = useState({ w: 600, h: 600 });
 
   // Everything the draw loop reads lives in refs: state updates would throw
   // away frames during a scan.
@@ -65,19 +65,6 @@ export function Sunburst(props: Props) {
   const themeRef = useRef({ palette, dark, base2, hovered, selected, rings });
   themeRef.current = { palette, dark, base2, hovered, selected, rings };
 
-  // ---- sizing ------------------------------------------------------------
-  useLayoutEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => {
-      const r = el.getBoundingClientRect();
-      setSize({ w: Math.max(240, r.width), h: Math.max(240, r.height) });
-    });
-    ro.observe(el);
-    const r = el.getBoundingClientRect();
-    setSize({ w: Math.max(240, r.width), h: Math.max(240, r.height) });
-    return () => ro.disconnect();
-  }, []);
 
   // ---- layout ------------------------------------------------------------
   useEffect(() => {
@@ -116,10 +103,19 @@ export function Sunburst(props: Props) {
 
     const { palette, dark, base2, selected } = themeRef.current;
     const dpr = window.devicePixelRatio || 1;
-    const { w, h } = { w: canvas.clientWidth, h: canvas.clientHeight };
-    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
-      canvas.width = Math.round(w * dpr);
-      canvas.height = Math.round(h * dpr);
+    // getBoundingClientRect, not clientWidth: under interface zoom the former
+    // is in the same visual space as a mouse event's coordinates and the
+    // latter is not, and the chart is hit-tested with mouse coordinates.
+    // Sizing the backing store from it also keeps the arcs sharp when zoomed,
+    // because the buffer then matches real device pixels.
+    const rect = canvas.getBoundingClientRect();
+    const w = Math.max(1, rect.width);
+    const h = Math.max(1, rect.height);
+    const bw = Math.round(w * dpr);
+    const bh = Math.round(h * dpr);
+    if (canvas.width !== bw || canvas.height !== bh) {
+      canvas.width = bw;
+      canvas.height = bh;
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
@@ -180,9 +176,24 @@ export function Sunburst(props: Props) {
     rafRef.current = requestAnimationFrame(draw);
   }, [draw]);
 
+  // ---- sizing ------------------------------------------------------------
+  // The canvas fills its wrapper through CSS, so resizing only has to trigger
+  // a redraw. Driving the element's size from React state instead would feed
+  // back on itself under interface zoom: the measured box is in visual pixels,
+  // writing it back as a style is in layout pixels, and the two differ by the
+  // zoom factor.
+  useLayoutEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => schedule());
+    ro.observe(el);
+    schedule();
+    return () => ro.disconnect();
+  }, [schedule]);
+
   useEffect(() => {
     schedule();
-  }, [size, palette, dark, base2, selected, hovered, schedule]);
+  }, [palette, dark, base2, selected, hovered, uiScale, schedule]);
 
   useEffect(
     () => () => {
@@ -293,7 +304,6 @@ export function Sunburst(props: Props) {
       <canvas
         ref={canvasRef}
         className="sunburst"
-        style={{ width: size.w, height: size.h }}
         onMouseMove={handleMove}
         onMouseLeave={handleLeave}
         onClick={handleClick}
@@ -368,25 +378,39 @@ function drawCentre(
   const dim = dark ? 'rgba(242,243,247,0.55)' : 'rgba(20,22,28,0.55)';
   const maxW = geo.r0 * 1.68;
 
+  // The readout is sized from the disc, not fixed: a short window or a large
+  // interface scale can leave the centre far smaller than usual, and fixed
+  // type overlapped itself there.
+  const clamp = (lo: number, v: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const titleSize = clamp(9, geo.r0 * 0.13, 15);
+  const valueSize = clamp(13, geo.r0 * 0.2, 24);
+  const smallSize = clamp(8, geo.r0 * 0.095, 11);
+  // Below this the disc only has room for the number itself.
+  const roomy = geo.r0 >= 52;
+
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  ctx.fillStyle = dim;
-  ctx.font = '500 11px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif';
-  const pathText = hov ? hov.label : lay.focusLabel;
-  if (pathText) fitText(ctx, dirname(pathText), geo.cx, geo.cy - geo.r0 * 0.46, maxW);
+  if (roomy) {
+    ctx.fillStyle = dim;
+    ctx.font = `500 ${smallSize}px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif`;
+    const pathText = hov ? hov.label : lay.focusLabel;
+    if (pathText) fitText(ctx, dirname(pathText), geo.cx, geo.cy - geo.r0 * 0.46, maxW);
+  }
 
   ctx.fillStyle = fg;
-  ctx.font = '600 15px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif';
-  fitText(ctx, title, geo.cx, geo.cy - geo.r0 * 0.16, maxW);
+  ctx.font = `600 ${titleSize}px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif`;
+  fitText(ctx, title, geo.cx, geo.cy - geo.r0 * 0.18, maxW);
 
-  ctx.font = '700 22px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif';
-  ctx.fillText(formatBytes(bytes, base2), geo.cx, geo.cy + geo.r0 * 0.2);
+  ctx.font = `700 ${valueSize}px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif`;
+  ctx.fillText(formatBytes(bytes, base2), geo.cx, geo.cy + geo.r0 * 0.14);
 
-  ctx.fillStyle = dim;
-  ctx.font = '400 11px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif';
-  const tail = [sub, share].filter(Boolean).join(' · ');
-  if (tail) fitText(ctx, tail, geo.cx, geo.cy + geo.r0 * 0.5, maxW);
+  if (roomy) {
+    ctx.fillStyle = dim;
+    ctx.font = `400 ${smallSize}px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif`;
+    const tail = [sub, share].filter(Boolean).join(' · ');
+    if (tail) fitText(ctx, tail, geo.cx, geo.cy + geo.r0 * 0.48, maxW);
+  }
 }
 
 function dirname(p: string): string {

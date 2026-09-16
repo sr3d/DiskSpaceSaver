@@ -50,9 +50,18 @@ func (a *App) buildMenu() *menu.Menu {
 	item.AddText("Delete Permanently…", keys.Combo("backspace", keys.CmdOrCtrlKey, keys.OptionOrAltKey), cmd("deleteForever"))
 
 	view := m.AddSubmenu("View")
+	// Chart navigation. "Zoom" here means moving through the tree, which is
+	// why the interface-size items below are named after size instead.
 	view.AddText("Zoom In", nil, cmd("zoomIn"))
 	view.AddText("Zoom Out", keys.CmdOrCtrl("up"), cmd("zoomOut"))
 	view.AddText("Back to Volumes", keys.Combo("up", keys.CmdOrCtrlKey, keys.ShiftKey), cmd("home"))
+	view.AddSeparator()
+	// Cmd-= is what macOS apps bind for "bigger": the key is labelled both =
+	// and +, and binding the unshifted form is the convention. The shifted
+	// press falls through to the window, where the keyboard handler takes it.
+	view.AddText("Bigger", keys.CmdOrCtrl("="), cmd("uiBigger"))
+	view.AddText("Smaller", keys.CmdOrCtrl("-"), cmd("uiSmaller"))
+	view.AddText("Actual Size", keys.CmdOrCtrl("0"), cmd("uiReset"))
 	view.AddSeparator()
 	view.AddText("Show Collector", keys.CmdOrCtrl("l"), cmd("toggleCollector"))
 	// Cmd-H is the system Hide item installed by AppMenu.

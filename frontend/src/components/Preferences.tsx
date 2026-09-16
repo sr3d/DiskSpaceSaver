@@ -87,6 +87,29 @@ export function Preferences() {
               <em>{prefs.rings}</em>
             </label>
             <label className="pref-row">
+              <span>Interface size</span>
+              <select
+                value={String(prefs.uiScale)}
+                onChange={(e) => api.setUIScale(Number(e.target.value)).then(setPrefs).catch((err) =>
+                  reportError('Could not change the interface size', err),
+                )}
+              >
+                {[
+                  ['0.75', 'Smallest'], ['0.85', 'Smaller'], ['1', 'Normal'],
+                  ['1.15', 'Larger'], ['1.3', 'Large'], ['1.5', 'Extra large'],
+                  ['1.75', 'Huge'], ['2', 'Largest'],
+                ].map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label} — {Math.round(Number(value) * 100)}%
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="pref-hint">
+              Scales everything, text included. <kbd>⌘=</kbd> and <kbd>⌘-</kbd> change it from
+              anywhere, and <kbd>⌘0</kbd> returns to normal.
+            </p>
+            <label className="pref-row">
               <span>Sizes</span>
               <select value={prefs.base2 ? '2' : '10'} onChange={(e) => patch({ base2: e.target.value === '2' })}>
                 <option value="10">Base 10 — GB, matches Finder</option>

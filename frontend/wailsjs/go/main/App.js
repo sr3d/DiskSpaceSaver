@@ -202,10 +202,18 @@ export function SetPrefs(arg1) {
   return window['go']['main']['App']['SetPrefs'](arg1);
 }
 
+export function SetUIScale(arg1) {
+  return window['go']['main']['App']['SetUIScale'](arg1);
+}
+
 export function StartScan(arg1, arg2) {
   return window['go']['main']['App']['StartScan'](arg1, arg2);
 }
 
 export function UninstallHelper() {
   return window['go']['main']['App']['UninstallHelper']();
+}
+
+export function ZoomUI(arg1, arg2) {
+  return window['go']['main']['App']['ZoomUI'](arg1, arg2);
 }

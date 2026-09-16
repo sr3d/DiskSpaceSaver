@@ -345,6 +345,7 @@ export namespace prefs {
 	    useBulkScan: boolean;
 	    minArcFraction: number;
 	    rings: number;
+	    uiScale: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Prefs(source);
@@ -367,6 +368,7 @@ export namespace prefs {
 	        this.useBulkScan = source["useBulkScan"];
 	        this.minArcFraction = source["minArcFraction"];
 	        this.rings = source["rings"];
+	        this.uiScale = source["uiScale"];
 	    }
 	}
 

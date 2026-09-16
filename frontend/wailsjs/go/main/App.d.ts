@@ -108,6 +108,10 @@ export function ScanCacheBytes():Promise<number>;
 
 export function SetPrefs(arg1:prefs.Prefs):Promise<prefs.Prefs>;
 
+export function SetUIScale(arg1:number):Promise<prefs.Prefs>;
+
 export function StartScan(arg1:string,arg2:boolean):Promise<string>;
 
 export function UninstallHelper():Promise<main.HelperStatus>;
+
+export function ZoomUI(arg1:number,arg2:boolean):Promise<prefs.Prefs>;

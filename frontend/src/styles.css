@@ -27,6 +27,10 @@
   --shadow: 0 10px 34px rgba(12, 14, 22, 0.16);
   --radius: 10px;
   --titlebar-h: 40px;
+
+  /* Set from JS alongside the document zoom. Anything that has to keep its
+     physical size divides by this. */
+  --ui-scale: 1;
 }
 
 :root[data-theme='dark'] {
@@ -82,6 +86,8 @@ kbd {
   flex: 1;
   min-height: 0;
   display: flex;
+  /* Anchors the collector when it floats over the sidebar at narrow widths. */
+  position: relative;
 }
 
 .boot {
@@ -100,6 +106,10 @@ kbd {
 /* ---------------------------------------------------------------- titlebar */
 
 .titlebar {
+  /* The window's traffic lights are drawn by macOS at a fixed size no matter
+     how the interface is scaled, so the bar keeps at least enough room for
+     them even at the smallest setting. */
+  min-height: calc(34px / var(--ui-scale));
   height: var(--titlebar-h);
   flex: none;
   display: flex;
@@ -109,8 +119,11 @@ kbd {
   background: var(--bg-sunken);
   border-bottom: 1px solid var(--line);
 }
-/* Clear space for the traffic lights, which the window draws over us. */
-.titlebar-inset { width: 78px; flex: none; }
+/* Clear space for the traffic lights, which the window draws over us. They do
+   not scale with the interface, so neither does the gap left for them —
+   otherwise the tabs collide with them when the interface is made smaller, and
+   drift far from them when it is made larger. */
+.titlebar-inset { width: calc(78px / var(--ui-scale)); flex: none; }
 
 .tabs {
   flex: 1;
@@ -291,8 +304,8 @@ kbd {
 
 .scanbody { flex: 1; min-height: 0; display: flex; }
 
-.sunburst-wrap { flex: 1; min-width: 0; position: relative; display: flex; }
-.sunburst { display: block; margin: auto; }
+.sunburst-wrap { flex: 1 1 auto; min-width: 240px; position: relative; display: flex; }
+.sunburst { display: block; width: 100%; height: 100%; }
 .sunburst-scanning {
   position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
   color: var(--fg-faint); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
@@ -301,7 +314,10 @@ kbd {
 /* ---------------------------------------------------------------- sidebar */
 
 .sidebar {
-  width: 350px; flex: none;
+  /* Shrinkable rather than fixed: the side panels must give way before the
+     chart does, since the chart is the thing the app is for. */
+  flex: 0 1 350px;
+  min-width: 210px;
   border-left: 1px solid var(--line);
   overflow-y: auto;
   background: var(--bg-raised);
@@ -355,11 +371,43 @@ kbd {
 /* ---------------------------------------------------------------- collector */
 
 .collector {
-  width: 330px; flex: none;
+  flex: 0 1 330px;
+  min-width: 210px;
   border-left: 1px solid var(--line);
   background: var(--bg-raised);
   display: flex; flex-direction: column;
 }
+
+/* Interface zoom shrinks the space the layout has to work with exactly as a
+   smaller window does, but a media query cannot see it: media queries are
+   evaluated against the window, and `zoom` is an element property. So the
+   breakpoint is computed in JS from width divided by scale and published as
+   data-layout on the root. Without this, 150% with the collector open left the
+   chart with no width at all.
+
+   First the collector stops taking a column of its own and floats over the
+   sidebar; the tray is a transient thing to act on, not a third panel worth
+   permanently crowding the chart. */
+[data-layout='medium'] .collector,
+[data-layout='narrow'] .collector {
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: min(330px, 78%);
+    z-index: 20;
+    box-shadow: var(--shadow);
+}
+
+/* Then, when even two columns will not fit, the sidebar moves below the chart
+   rather than squeezing it out sideways. */
+[data-layout='narrow'] .scanbody { flex-direction: column; }
+[data-layout='narrow'] .sunburst-wrap { flex: 1 1 58%; min-height: 200px; min-width: 0; }
+[data-layout='narrow'] .sidebar {
+  flex: 1 1 42%;
+  min-width: 0;
+  border-left: none;
+  border-top: 1px solid var(--line);
+}
+[data-layout='narrow'] .volume-grid { grid-template-columns: 1fr; }
 .collector-head, .sheet-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 11px 14px; border-bottom: 1px solid var(--line);
@@ -396,11 +444,12 @@ kbd {
   position: fixed; inset: 0; z-index: 40;
   background: rgba(8, 9, 13, 0.42);
   display: grid; place-items: center;
+  padding: 24px;
   backdrop-filter: blur(1.5px);
 }
 .sheet {
-  width: min(620px, calc(100vw - 60px));
-  max-height: calc(100vh - 90px);
+  width: min(620px, 92%);
+  max-height: 88%;
   display: flex; flex-direction: column;
   background: var(--bg-raised);
   border: 1px solid var(--line);
@@ -408,8 +457,8 @@ kbd {
   box-shadow: var(--shadow);
   overflow: hidden;
 }
-.sheet-wide { width: min(760px, calc(100vw - 60px)); }
-.sheet-narrow { width: min(400px, calc(100vw - 60px)); }
+.sheet-wide { width: min(760px, 94%); }
+.sheet-narrow { width: min(400px, 88%); }
 .sheet-body { overflow-y: auto; padding: 16px 18px 20px; }
 .sheet-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
 

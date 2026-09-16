@@ -66,6 +66,23 @@ takes 69s.
 Accuracy against the same volume: the scan sees 755.3 GB, and adding the 31.8
 GB macOS reports as purgeable lands within **0.73%** of Finder's used figure.
 
+## Keyboard
+
+| | |
+|---|---|
+| `⌘=` / `⌘-` / `⌘0` | interface bigger, smaller, back to normal |
+| `Return` / `⌘↑` | zoom into the selected folder, zoom back out |
+| `Space` | Quick Look |
+| `⌘I` · `⌘⇧R` · `⌘O` | Get Info · Show in Finder · Open |
+| `⌘D` | add to the collector |
+| `⌘⌫` / `⌘⌥⌫` | Trash · delete permanently |
+| `⌘T` · `⌘R` · `⌘L` · `⌘,` | new scan · rescan · collector · preferences |
+
+The interface scale runs from 75% to 200% and is remembered between launches;
+it is also in Preferences under Appearance. It scales layout rather than
+painting over it, so text stays sharp and the chart re-renders at the new size
+instead of being magnified.
+
 ## Things that are deliberate
 
 **Cloud storage is not counted.** iCloud Drive, Google Drive and the rest
