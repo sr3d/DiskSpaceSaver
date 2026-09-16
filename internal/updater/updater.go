@@ -79,6 +79,7 @@ func New(p *prefs.Store) *Updater {
 	}
 	ok, why := u.drv.Available()
 	u.state = State{Supported: ok, CurrentVersion: CurrentVersion(), Reason: why}
+	active = u
 	return u
 }
 
@@ -233,4 +234,15 @@ func FeedURLForChannel(channel string) string {
 		return FeedURL + "?channel=beta"
 	}
 	return FeedURL
+}
+
+// active is the updater the Sparkle delegate reports through. There is exactly
+// one per process, set when it is constructed.
+var active *Updater
+
+func currentChannel() string {
+	if active == nil {
+		return "stable"
+	}
+	return active.prefs.Get().UpdateChannel
 }

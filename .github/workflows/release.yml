@@ -1,0 +1,123 @@
+name: Release
+
+# Runs on a tag. The heavy lifting is the same Makefile the local release
+# script uses, so a CI release and a desk release produce the same bundle.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build (e.g. 1.2.0)
+        required: true
+      channel:
+        description: stable or beta
+        default: stable
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.25', cache: true }
+
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: npm, cache-dependency-path: frontend/package-lock.json }
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.13.0
+
+      - name: Test
+        run: go test ./...
+
+      - name: Import signing certificate
+        env:
+          CERT_P12: ${{ secrets.DEVELOPER_ID_P12 }}
+          CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          echo "$CERT_P12" | base64 --decode > /tmp/cert.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security import /tmp/cert.p12 -k build.keychain -P "$CERT_PASSWORD" \
+            -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          rm -f /tmp/cert.p12
+
+      - name: Determine version
+        id: v
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build, sign and verify
+        env:
+          SIGN_ID: ${{ secrets.SIGN_IDENTITY }}
+        run: |
+          make app VERSION=${{ steps.v.outputs.version }}
+          make verify VERSION=${{ steps.v.outputs.version }}
+
+      - name: Notarise and staple
+        env:
+          AC_API_KEY_ID: ${{ secrets.AC_API_KEY_ID }}
+          AC_API_ISSUER: ${{ secrets.AC_API_ISSUER }}
+          AC_API_KEY: ${{ secrets.AC_API_KEY }}
+        run: |
+          echo "$AC_API_KEY" | base64 --decode > /tmp/ac.p8
+          xcrun notarytool store-credentials diskspacesaver \
+            --key /tmp/ac.p8 --key-id "$AC_API_KEY_ID" --issuer "$AC_API_ISSUER"
+          rm -f /tmp/ac.p8
+          make notarize VERSION=${{ steps.v.outputs.version }}
+          make staple VERSION=${{ steps.v.outputs.version }}
+          spctl --assess --type execute --verbose=2 build/bin/DiskSpaceSaver.app
+
+      - name: Sign the update
+        id: sign
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          echo "$SPARKLE_PRIVATE_KEY" > /tmp/sparkle.key
+          out=$(./bin/sparkle/sign_update \
+            "build/bin/DiskSpaceSaver-${{ steps.v.outputs.version }}.zip" -f /tmp/sparkle.key)
+          rm -f /tmp/sparkle.key
+          echo "signature=$(sed -n 's/.*edSignature="\([^"]*\)".*/\1/p' <<<"$out")" >> "$GITHUB_OUTPUT"
+          echo "length=$(sed -n 's/.*length="\([0-9]*\)".*/\1/p' <<<"$out")" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.v.outputs.version }}" \
+            "build/bin/DiskSpaceSaver-${{ steps.v.outputs.version }}.zip" \
+            --title "DiskSpaceSaver ${{ steps.v.outputs.version }}" \
+            --notes-file "docs/release-notes/${{ steps.v.outputs.version }}.md"
+
+      - name: Update the appcast
+        env:
+          UPDATE_TOKEN: ${{ secrets.UPDATE_TOKEN }}
+        run: |
+          V=${{ steps.v.outputs.version }}
+          curl -fsS -X POST https://updates.diskspacesaver.app/releases \
+            -H "authorization: Bearer $UPDATE_TOKEN" \
+            -H 'content-type: application/json' \
+            -d "$(jq -n --arg version "$V" \
+                        --arg build "$(git rev-list --count HEAD)" \
+                        --arg url "https://github.com/${{ github.repository }}/releases/download/v$V/DiskSpaceSaver-$V.zip" \
+                        --arg signature '${{ steps.sign.outputs.signature }}' \
+                        --arg notes "$(cat docs/release-notes/$V.md)" \
+                        --arg channel "${{ inputs.channel || 'stable' }}" \
+                        --argjson length ${{ steps.sign.outputs.length }} \
+                  '{version:$version,build:$build,url:$url,length:$length,
+                    signature:$signature,notes:$notes,channel:$channel,
+                    minimumSystemVersion:"13.0"}')"

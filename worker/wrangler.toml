@@ -1,0 +1,21 @@
+name = "diskspacesaver-updates"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+
+# One Durable Object instance holds the release list and the event counters.
+# The free tier is ample: a few releases a month and a few events per install
+# per day.
+[[durable_objects.bindings]]
+name = "UPDATES"
+class_name = "UpdateState"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["UpdateState"]
+
+# Set with: wrangler secret put ADMIN_TOKEN
+# Never commit it.
+
+[[routes]]
+pattern = "updates.diskspacesaver.app/*"
+zone_name = "diskspacesaver.app"

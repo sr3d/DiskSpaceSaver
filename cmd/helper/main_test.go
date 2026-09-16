@@ -24,10 +24,10 @@ func TestWithinRootRefusesEscapes(t *testing.T) {
 	}
 
 	outside := []string{
-		"/Users/someone/Projects",           // the root itself is never a target
-		"/Users/someone",                    // the parent
+		"/Users/someone/Projects",            // the root itself is never a target
+		"/Users/someone",                     // the parent
 		"/Users/someone/Projects/../secrets", // climbs out
-		"/Users/someone/Projects2/a.bin",    // prefix, not a child
+		"/Users/someone/Projects2/a.bin",     // prefix, not a child
 		"/etc/passwd",
 		"/",
 		"relative/path",
