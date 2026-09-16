@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/sr3d/diskspacesaver/internal/scanner"
 	"github.com/vmihailenco/msgpack/v5"
@@ -108,9 +109,16 @@ type Snapshot struct {
 var ErrTooLarge = errors.New("helperproto: message exceeds maximum size")
 
 // Conn wraps a stream with length-prefixed msgpack framing.
+//
+// Writes are serialised and each message goes out as a single Write. A scan
+// streams frames from one goroutine while progress is reported from another,
+// and a header separated from its payload by another goroutine's bytes
+// desyncs the stream permanently — the next length prefix is read out of the
+// middle of a message.
 type Conn struct {
 	w   io.Writer
 	r   io.Reader
+	wmu sync.Mutex
 	buf []byte
 	hdr [4]byte
 }
@@ -138,11 +146,13 @@ func (c *Conn) writeAny(v any) error {
 	if len(b) > MaxMessage {
 		return ErrTooLarge
 	}
-	binary.LittleEndian.PutUint32(c.hdr[:], uint32(len(b)))
-	if _, err := c.w.Write(c.hdr[:]); err != nil {
-		return err
-	}
-	_, err = c.w.Write(b)
+	out := make([]byte, 4+len(b))
+	binary.LittleEndian.PutUint32(out[:4], uint32(len(b)))
+	copy(out[4:], b)
+
+	c.wmu.Lock()
+	defer c.wmu.Unlock()
+	_, err = c.w.Write(out)
 	return err
 }
 

@@ -7,3 +7,5 @@ frontend/dist
 /dist/
 *.bin
 .DS_Store
+/build/bin/
+.env

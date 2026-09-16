@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened runtime entitlements.
+
+  The app is not sandboxed: a sandboxed process cannot scan a whole volume and
+  cannot install a privileged helper, which is why this ships outside the App
+  Store.
+-->
+<plist version="1.0">
+<dict>
+    <!-- Sparkle's updater and the helper are separate signed executables the
+         app launches; without this the hardened runtime refuses them. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+
+    <!-- Reaching Finder for "Get Info" goes through Apple Events. -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+
+    <!-- The updater downloads over the network and the update statistics are
+         posted out. -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+</dict>
+</plist>
