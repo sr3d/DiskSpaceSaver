@@ -33,11 +33,15 @@ func (a *App) buildMenu() *menu.Menu {
 	edit := m.AddSubmenu("Edit")
 	edit.AddText("Copy Path", keys.Combo("c", keys.CmdOrCtrlKey, keys.ShiftKey), cmd("copyPath"))
 	edit.AddSeparator()
-	edit.AddText("Select All in Folder", keys.CmdOrCtrl("a"), cmd("selectAll"))
+	// No accelerator: Cmd-A must keep working inside text fields. The
+	// frontend binds it on keydown when focus is not in an input.
+	edit.AddText("Select All in Folder", nil, cmd("selectAll"))
 
 	item := m.AddSubmenu("Item")
 	item.AddText("Show in Finder", keys.Combo("r", keys.CmdOrCtrlKey, keys.ShiftKey), cmd("reveal"))
-	item.AddText("Quick Look", keys.Key("space"), cmd("quickLook"))
+	// Space and Return are bound in the frontend, guarded against text
+	// input; as menu accelerators they would swallow every keystroke.
+	item.AddText("Quick Look", nil, cmd("quickLook"))
 	item.AddText("Get Info", keys.CmdOrCtrl("i"), cmd("getInfo"))
 	item.AddText("Open", keys.CmdOrCtrl("o"), cmd("open"))
 	item.AddSeparator()
@@ -46,12 +50,13 @@ func (a *App) buildMenu() *menu.Menu {
 	item.AddText("Delete Permanently…", keys.Combo("backspace", keys.CmdOrCtrlKey, keys.OptionOrAltKey), cmd("deleteForever"))
 
 	view := m.AddSubmenu("View")
-	view.AddText("Zoom In", keys.Key("enter"), cmd("zoomIn"))
+	view.AddText("Zoom In", nil, cmd("zoomIn"))
 	view.AddText("Zoom Out", keys.CmdOrCtrl("up"), cmd("zoomOut"))
 	view.AddText("Back to Volumes", keys.Combo("up", keys.CmdOrCtrlKey, keys.ShiftKey), cmd("home"))
 	view.AddSeparator()
 	view.AddText("Show Collector", keys.CmdOrCtrl("l"), cmd("toggleCollector"))
-	view.AddText("Hidden Space…", keys.CmdOrCtrl("h"), cmd("hiddenSpace"))
+	// Cmd-H is the system Hide item installed by AppMenu.
+	view.AddText("Hidden Space…", keys.Combo("h", keys.CmdOrCtrlKey, keys.ShiftKey), cmd("hiddenSpace"))
 	view.AddSeparator()
 	view.AddText("Toggle Full Screen", keys.Combo("f", keys.CmdOrCtrlKey, keys.ControlKey), func(*menu.CallbackData) {
 		runtime.WindowFullscreen(a.ctx)

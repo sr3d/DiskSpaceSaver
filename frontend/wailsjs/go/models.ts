@@ -167,6 +167,7 @@ export namespace main {
 	    }
 	}
 	export class CachedScan {
+	    found: boolean;
 	    key: string;
 	    root: string;
 	    savedAt: number;
@@ -180,6 +181,7 @@ export namespace main {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.found = source["found"];
 	        this.key = source["key"];
 	        this.root = source["root"];
 	        this.savedAt = source["savedAt"];
@@ -386,6 +388,8 @@ export namespace scanstore {
 	    currentPath?: string;
 	    startedAt: number;
 	    finishedAt?: number;
+	    stalled: boolean;
+	    stalledMs?: number;
 	    fromCache: boolean;
 	    cachedAt?: number;
 	    err?: string;
@@ -409,6 +413,8 @@ export namespace scanstore {
 	        this.currentPath = source["currentPath"];
 	        this.startedAt = source["startedAt"];
 	        this.finishedAt = source["finishedAt"];
+	        this.stalled = source["stalled"];
+	        this.stalledMs = source["stalledMs"];
 	        this.fromCache = source["fromCache"];
 	        this.cachedAt = source["cachedAt"];
 	        this.err = source["err"];

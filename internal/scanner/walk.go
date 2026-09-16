@@ -31,6 +31,11 @@ type Options struct {
 	// UseBulk enables the getattrlistbulk(2) fast path (M7). Falls back to
 	// the readdir+fstatat path automatically if the syscall is unavailable.
 	UseBulk bool
+	// ScanCloudStorage descends into cloud file-provider folders. Off by
+	// default: their contents are not on this disk, and stat-ing an item that
+	// has not been downloaded blocks on the network. Scanning the root of a
+	// provider directly still works — this only governs ones met on the way.
+	ScanCloudStorage bool
 	// ProgressInterval throttles Progress emission. Zero means 100ms.
 	ProgressInterval time.Duration
 }
@@ -115,6 +120,11 @@ type Scanner struct {
 
 	files, dirs, bytes, noperm atomic.Int64
 	curPath                    atomic.Pointer[string]
+
+	// lastAdvance tracks when the counters last moved, so a walk blocked in a
+	// stat syscall can be reported rather than looking like a freeze.
+	lastAdvance atomic.Int64
+	lastTotal   atomic.Int64
 
 	frames chan Frame
 	prog   chan Progress
@@ -210,6 +220,15 @@ func (s *Scanner) startProgress(ctx context.Context) func() {
 }
 
 func (s *Scanner) emitProgress(final bool) {
+	now := time.Now().UnixMilli()
+	total := s.files.Load() + s.dirs.Load()
+	if total != s.lastTotal.Load() {
+		s.lastTotal.Store(total)
+		s.lastAdvance.Store(now)
+	} else if s.lastAdvance.Load() == 0 {
+		s.lastAdvance.Store(now)
+	}
+
 	p := Progress{
 		Files:        s.files.Load(),
 		Dirs:         s.dirs.Load(),
@@ -222,6 +241,12 @@ func (s *Scanner) emitProgress(final bool) {
 	}
 	if err := s.Err(); err != nil {
 		p.Err = err.Error()
+	}
+	if !final {
+		if stuck := now - s.lastAdvance.Load(); stuck > 3000 {
+			p.Stalled = true
+			p.StalledMS = stuck
+		}
 	}
 	select {
 	case s.prog <- p:
@@ -434,6 +459,13 @@ func (s *Scanner) makeEntry(job dirJob, name string, st *unix.Stat_t, children *
 		e.Kind = KindOther
 	}
 
+	if isDataless(st) {
+		// Not on this disk: it occupies no local blocks and reading it would
+		// pull it over the network.
+		e.Flags |= FlagCloud
+		e.Alloc = 0
+	}
+
 	if e.Kind == KindFile || e.Kind == KindOther {
 		// Hardlinks: charge the space to whichever path we reach first and
 		// zero it everywhere else, so the tree total matches the volume.
@@ -449,6 +481,9 @@ func (s *Scanner) makeEntry(job dirJob, name string, st *unix.Stat_t, children *
 	// Directory (or package): decide whether to descend.
 	full := filepath.Join(job.path, name)
 	switch {
+	case !s.opt.ScanCloudStorage && (isCloudRoot(full) || e.Flags&FlagCloud != 0):
+		e.Flags |= FlagCloud
+		e.Alloc, e.Logical = 0, 0
 	case alwaysSkip[name] || skipAbs[full]:
 		e.Flags |= FlagExcluded
 	case s.excluded(full):

@@ -100,7 +100,7 @@ export function QuickLook(arg1:Array<main.ItemRef>,arg2:number):Promise<void>;
 
 export function RemoveExclusion(arg1:string):Promise<prefs.Prefs>;
 
-export function Rescan(arg1:string,arg2:number):Promise<void>;
+export function Rescan(arg1:string,arg2:number):Promise<string>;
 
 export function RevealInFinder(arg1:Array<main.ItemRef>):Promise<void>;
 

@@ -62,6 +62,8 @@ type Summary struct {
 	CurrentPath  string `json:"currentPath,omitempty"`
 	StartedAt    int64  `json:"startedAt"`
 	FinishedAt   int64  `json:"finishedAt,omitempty"`
+	Stalled      bool   `json:"stalled"`
+	StalledMS    int64  `json:"stalledMs,omitempty"`
 	FromCache    bool   `json:"fromCache"`
 	CachedAt     int64  `json:"cachedAt,omitempty"`
 	Err          string `json:"err,omitempty"`
@@ -98,6 +100,7 @@ func (s *Session) Summary() Summary {
 		AsAdmin: s.AsAdmin, Status: s.status,
 		Files: s.prog.Files, Dirs: s.prog.Dirs, Bytes: s.prog.Bytes,
 		Inaccessible: s.prog.Inaccessible, CurrentPath: s.prog.CurrentPath,
+		Stalled: s.prog.Stalled, StalledMS: s.prog.StalledMS,
 		StartedAt: s.startedAt.UnixMilli(), FromCache: s.fromCache, Err: s.err,
 	}
 	if !s.finishedAt.IsZero() {
@@ -114,6 +117,7 @@ func (s *Session) Summary() Summary {
 		}
 		sum.Inaccessible = s.Tree.Errors()
 		sum.CurrentPath = ""
+		sum.Stalled, sum.StalledMS = false, 0
 	}
 	return sum
 }

@@ -73,10 +73,22 @@ func (t *Tree) Viewport(focus uint32, depth int, minFraction float64, scanning b
 		depth = 12
 	}
 
+	// The arc floor is angular, so it is a fraction of the *focus* total and
+	// is computed once here. Re-deriving it per node would keep a wedge that
+	// is 0.1% of its own parent but a sub-pixel sliver of the drawn circle,
+	// which is exactly the case that makes a deep viewport enormous.
+	var cutoff int64
+	if fn := t.node(focus); fn != nil && minFraction > 0 && fn.Alloc > 0 {
+		cutoff = int64(float64(fn.Alloc) * minFraction)
+	}
+
 	out := ViewportSlice{
-		Focus:    t.buildV(focus, depth, minFraction),
-		Scanning: scanning,
-		Sorted:   t.sorted.Load(),
+		// Allocated even when empty: a nil slice marshals to null and the
+		// chart would dereference it on the very first frame at the root.
+		Ancestors: []VNode{},
+		Focus:     t.buildV(focus, depth, cutoff),
+		Scanning:  scanning,
+		Sorted:    t.sorted.Load(),
 	}
 	if r := t.node(t.Root); r != nil {
 		out.RootTotal = r.Alloc
@@ -100,7 +112,9 @@ func (t *Tree) Viewport(focus uint32, depth int, minFraction float64, scanning b
 	return out
 }
 
-func (t *Tree) buildV(id uint32, depth int, minFraction float64) VNode {
+// buildV expands a node to depth levels. cutoff is an absolute byte count,
+// already derived from the focus total by Viewport.
+func (t *Tree) buildV(id uint32, depth int, cutoff int64) VNode {
 	n := t.node(id)
 	v := VNode{
 		ID: id, Name: n.Name, Size: n.Alloc, Logical: n.Logical,
@@ -112,10 +126,6 @@ func (t *Tree) buildV(id uint32, depth int, minFraction float64) VNode {
 	}
 
 	kids := t.topChildren(n)
-	cutoff := int64(0)
-	if minFraction > 0 && n.Alloc > 0 {
-		cutoff = int64(float64(n.Alloc) * minFraction)
-	}
 
 	var otherSize, otherLog int64
 	var otherCount int32
@@ -130,7 +140,7 @@ func (t *Tree) buildV(id uint32, depth int, minFraction float64) VNode {
 			otherCount++
 			continue
 		}
-		v.Kids = append(v.Kids, t.buildV(cid, depth-1, minFraction))
+		v.Kids = append(v.Kids, t.buildV(cid, depth-1, cutoff))
 	}
 	if otherCount > 0 {
 		v.Kids = append(v.Kids, VNode{
@@ -232,7 +242,7 @@ func (t *Tree) Children(id uint32, offset, limit int) []NodeSummary {
 	defer t.mu.RUnlock()
 	n := t.node(id)
 	if n == nil {
-		return nil
+		return []NodeSummary{}
 	}
 	kids := t.topChildren(n)
 	total := n.Alloc
@@ -240,7 +250,7 @@ func (t *Tree) Children(id uint32, offset, limit int) []NodeSummary {
 		offset = 0
 	}
 	if offset >= len(kids) {
-		return nil
+		return []NodeSummary{}
 	}
 	if limit <= 0 || limit > 2000 {
 		limit = 2000
@@ -284,7 +294,7 @@ func (t *Tree) ChildCount(id uint32) int {
 func (t *Tree) Ancestors(id uint32) []NodeSummary {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	var out []NodeSummary
+	out := []NodeSummary{}
 	for cur := id; cur != Invalid; {
 		n := t.node(cur)
 		if n == nil {

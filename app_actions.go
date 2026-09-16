@@ -31,7 +31,9 @@ type Result struct {
 	Bytes     int64             `json:"bytes"`
 }
 
-func newResult() Result { return Result{Failed: map[string]string{}} }
+func newResult() Result {
+	return Result{Succeeded: []string{}, Failed: map[string]string{}}
+}
 
 // resolve turns an ItemRef into a session and a verified absolute path.
 //
@@ -234,23 +236,26 @@ func humanDeleteError(err error, toTrash bool) string {
 
 // Rescan re-walks one subtree and swaps the result in, keeping the node's
 // handle so the UI's focus and selection survive.
-func (a *App) Rescan(scanID string, nodeID uint32) error {
+//
+// It returns the scan id to show afterwards: the same one for a subtree
+// rescan, a new one when the whole scan was restarted.
+func (a *App) Rescan(scanID string, nodeID uint32) (string, error) {
 	s, ok := a.scans.Get(scanID)
 	if !ok {
-		return errNoScan(scanID)
+		return "", errNoScan(scanID)
 	}
 	if nodeID == tree.Invalid || nodeID == s.Tree.Root {
 		return a.rescanAll(s)
 	}
 	path := s.Tree.Path(nodeID)
 	if path == "" {
-		return errors.New("that item is no longer in the scan")
+		return "", errors.New("that item is no longer in the scan")
 	}
 	if _, err := os.Stat(path); err != nil {
 		// Gone since the last scan: prune rather than fail.
 		s.Tree.Prune(nodeID)
 		a.emit(scanstore.EventTree, map[string]any{"scanID": scanID, "summary": s.Summary()})
-		return nil
+		return scanID, nil
 	}
 
 	p := a.prefs.Get()
@@ -265,21 +270,20 @@ func (a *App) Rescan(scanID string, nodeID uint32) error {
 		subTree.Apply(f)
 	}
 	if err := sub.Err(); err != nil {
-		return err
+		return "", err
 	}
 	subTree.Finalize()
 	s.Tree.ReplaceSubtree(nodeID, subTree)
 
 	a.emit(scanstore.EventTree, map[string]any{"scanID": scanID, "summary": s.Summary()})
-	return nil
+	return scanID, nil
 }
 
-// rescanAll restarts a whole scan in place of the current tab.
-func (a *App) rescanAll(s *scanstore.Session) error {
+// rescanAll restarts a whole scan, returning the id of the replacement tab.
+func (a *App) rescanAll(s *scanstore.Session) (string, error) {
 	root, admin := s.Root, s.AsAdmin
 	a.CloseScan(s.ID)
-	_, err := a.StartScan(root, admin)
-	return err
+	return a.StartScan(root, admin)
 }
 
 // ---------------------------------------------------------------- collector

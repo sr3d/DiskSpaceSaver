@@ -190,3 +190,49 @@ func TestPermissionErrorsRecorded(t *testing.T) {
 		t.Error("inaccessible directory not marked on the node")
 	}
 }
+
+// The arc floor must be a fraction of the focus total, not of each node's own
+// parent. A deep ring is otherwise unbounded: a wedge that is 20% of its
+// parent can be a sub-pixel sliver of the drawn circle.
+func TestArcCutoffIsRelativeToFocus(t *testing.T) {
+	tr := New("/scan")
+	tr.Apply(scanner.Frame{DirID: scanner.RootDirID, Entry: []scanner.Entry{
+		{Name: "huge", Kind: scanner.KindDir, DirID: 2},
+		{Name: "tiny", Kind: scanner.KindDir, DirID: 3},
+	}})
+	tr.Apply(scanner.Frame{DirID: 2, Entry: []scanner.Entry{
+		{Name: "h.bin", Kind: scanner.KindFile, Alloc: 1_000_000},
+	}})
+	// "tiny" is 0.1% of the root but its children are 25% of *it*.
+	tr.Apply(scanner.Frame{DirID: 3, Entry: []scanner.Entry{
+		{Name: "a.bin", Kind: scanner.KindFile, Alloc: 250},
+		{Name: "b.bin", Kind: scanner.KindFile, Alloc: 250},
+		{Name: "c.bin", Kind: scanner.KindFile, Alloc: 250},
+		{Name: "d.bin", Kind: scanner.KindFile, Alloc: 250},
+	}})
+	tr.Finalize()
+
+	// 1% of the root total (~10,000 bytes) must exclude every child of "tiny".
+	v := tr.Viewport(tr.Root, 3, 0.01, false)
+	var tiny *VNode
+	for i := range v.Focus.Kids {
+		if v.Focus.Kids[i].Name == "tiny" {
+			tiny = &v.Focus.Kids[i]
+		}
+	}
+	if tiny != nil {
+		for _, k := range tiny.Kids {
+			if k.Other == 0 {
+				t.Errorf("child %q (%d bytes) survived a cutoff of 1%% of the focus total",
+					k.Name, k.Size)
+			}
+		}
+	}
+
+	// Focusing on "tiny" makes the same children the whole circle, so now they
+	// must all be drawn.
+	v = tr.Viewport(tr.Lookup("/scan/tiny"), 2, 0.01, false)
+	if len(v.Focus.Kids) != 4 {
+		t.Errorf("after focusing, got %d children, want 4 — cutoff did not rescale", len(v.Focus.Kids))
+	}
+}

@@ -8,7 +8,7 @@
         <key>CFBundleExecutable</key>
         <string>{{.OutputFilename}}</string>
         <key>CFBundleIdentifier</key>
-        <string>com.wails.{{safeBundleID .Name}}</string>
+        <string>com.sr3d.diskspacesaver</string>
         <key>CFBundleVersion</key>
         <string>{{.Info.ProductVersion}}</string>
         <key>CFBundleGetInfoString</key>
@@ -17,12 +17,46 @@
         <string>{{.Info.ProductVersion}}</string>
         <key>CFBundleIconFile</key>
         <string>iconfile</string>
+        <!-- SMAppService, which installs the privileged helper, needs 13. -->
         <key>LSMinimumSystemVersion</key>
-        <string>10.13.0</string>
+        <string>13.0</string>
         <key>NSHighResolutionCapable</key>
         <string>true</string>
         <key>NSHumanReadableCopyright</key>
         <string>{{.Info.Copyright}}</string>
+        <key>NSSupportsAutomaticTermination</key>
+        <false/>
+        <!-- Folders can be dropped on the Dock icon or opened with the app. -->
+        <key>CFBundleDocumentTypes</key>
+        <array>
+          <dict>
+            <key>CFBundleTypeName</key>
+            <string>Folder</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+            <key>LSItemContentTypes</key>
+            <array>
+              <string>public.folder</string>
+              <string>public.volume</string>
+            </array>
+          </dict>
+        </array>
+        <key>NSAppleEventsUsageDescription</key>
+        <string>DiskSpaceSaver asks Finder to open the Get Info window for an item you pick.</string>
+        <key>NSDesktopFolderUsageDescription</key>
+        <string>DiskSpaceSaver needs to read your folders to measure what is using disk space.</string>
+        <key>NSDocumentsFolderUsageDescription</key>
+        <string>DiskSpaceSaver needs to read your folders to measure what is using disk space.</string>
+        <key>NSDownloadsFolderUsageDescription</key>
+        <string>DiskSpaceSaver needs to read your folders to measure what is using disk space.</string>
+        <key>NSRemovableVolumesUsageDescription</key>
+        <string>DiskSpaceSaver scans removable volumes you choose.</string>
+        <key>SUFeedURL</key>
+        <string>https://updates.diskspacesaver.app/appcast.xml</string>
+        <key>SUEnableInstallerLauncherService</key>
+        <true/>
         {{if .Info.FileAssociations}}
         <key>CFBundleDocumentTypes</key>
         <array>

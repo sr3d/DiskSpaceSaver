@@ -23,6 +23,7 @@ const (
 	FlagMountPt              // a different st_dev; not descended into
 	FlagExcluded             // matched an exclusion rule; not descended into
 	FlagNoPerm               // could not be read (EPERM/EACCES)
+	FlagCloud                // a cloud file-provider root; not local storage
 )
 
 // Entry is one directory entry as the scanner saw it.
@@ -64,7 +65,13 @@ type Progress struct {
 	Inaccessible int64  `json:"inaccessible"`
 	CurrentPath  string `json:"currentPath"`
 	Done         bool   `json:"done"`
-	Err          string `json:"err,omitempty"`
+	// Stalled is set when the walk has made no progress for a while. A
+	// network volume or a cloud provider can block a stat syscall for many
+	// seconds, and a frozen-looking window with no explanation is worse than
+	// a slow one that says what it is waiting for.
+	Stalled   bool   `json:"stalled"`
+	StalledMS int64  `json:"stalledMs,omitempty"`
+	Err       string `json:"err,omitempty"`
 }
 
 // RootDirID is the id the scanner always assigns to the scan root.

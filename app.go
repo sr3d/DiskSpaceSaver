@@ -189,6 +189,7 @@ func (a *App) StartScan(path string, asAdmin bool) (string, error) {
 		return "", err
 	}
 	go a.cacheWhenDone(s)
+	a.emit("scan:opened", s.ID)
 	return s.ID, nil
 }
 
@@ -251,7 +252,12 @@ func (a *App) labelFor(root string) string {
 }
 
 // CachedScan describes a previously saved scan for a path.
+//
+// Found is a field rather than this being a nullable pointer: Wails generates
+// a model constructor that indexes the payload, so returning nil without an
+// error throws inside the binding before any of our code runs.
 type CachedScan struct {
+	Found     bool   `json:"found"`
 	Key       string `json:"key"`
 	Root      string `json:"root"`
 	SavedAt   int64  `json:"savedAt"`
@@ -262,17 +268,18 @@ type CachedScan struct {
 
 // LookupCachedScan reports whether a cached scan exists for a path, so the UI
 // can offer "scanned 3h ago — open instantly, or rescan".
-func (a *App) LookupCachedScan(path string) *CachedScan {
+func (a *App) LookupCachedScan(path string) CachedScan {
 	if !a.prefs.Get().UseCache {
-		return nil
+		return CachedScan{}
 	}
 	root := scanner.ResolveScanRoot(path)
 	meta, err := a.cache.Stat(cacheKey(root, a.volumeUUIDFor(root)))
 	if err != nil || meta == nil {
-		return nil
+		return CachedScan{}
 	}
-	return &CachedScan{
-		Key: meta.Key, Root: meta.Root, SavedAt: meta.SavedAt.UnixMilli(),
+	return CachedScan{
+		Found: true,
+		Key:   meta.Key, Root: meta.Root, SavedAt: meta.SavedAt.UnixMilli(),
 		Nodes: meta.Nodes, Bytes: meta.Bytes,
 		AgeMillis: time.Since(meta.SavedAt).Milliseconds(),
 	}
