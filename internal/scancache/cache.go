@@ -224,3 +224,8 @@ func (c *Cache) TotalBytes() int64 {
 	}
 	return total
 }
+
+// writeFile is used by the tests to corrupt an entry deliberately.
+func writeFile(path string, data []byte) error {
+	return os.WriteFile(path, data, 0o644)
+}

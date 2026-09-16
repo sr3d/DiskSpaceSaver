@@ -139,8 +139,10 @@ func (a *App) ListVolumes() ([]macos.Volume, error) {
 
 // ---------------------------------------------------------------- scanning
 
-// StartScan begins scanning a path and returns the new scan's id. When a scan
-// of the same root is already open it is returned instead of duplicated.
+// StartScan begins scanning a path and returns the new scan's id. A scan of
+// the same root that is still running is returned instead of started twice; a
+// finished one is not, because asking to scan again means asking for fresh
+// numbers.
 func (a *App) StartScan(path string, asAdmin bool) (string, error) {
 	if path == "" {
 		return "", errors.New("no path given")

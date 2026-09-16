@@ -71,11 +71,14 @@ GB macOS reports as purgeable lands within **0.73%** of Finder's used figure.
 **Cloud storage is not counted.** iCloud Drive, Google Drive and the rest
 project their contents into the data volume through the FileProvider
 framework. They are indistinguishable from ordinary folders — same device
-number, no mount entry, no flag on the root — but their bytes are not on this
-disk, and `stat`-ing a file that has not been downloaded blocks on the network.
-Walking into one both overstated free space by tens of gigabytes and parked
-every worker until the scan appeared frozen. They are shown, marked, and left
-alone. Scanning them properly means talking to each provider's API.
+number, no mount entry, no flag on the root — and `stat`-ing a file that has
+not been downloaded blocks on the network. Walking into one counted tens of
+gigabytes that were never on the disk and parked every worker until the scan
+appeared frozen. They are shown, marked, and left alone.
+
+The trade is deliberate but not free: files you *have* downloaded do occupy
+real space, and they are no longer counted either. Doing this properly means
+asking each provider's API which files are local, which is a separate feature.
 
 **Allocated size, not file size.** The chart draws `st_blocks * 512`: what the
 volume actually gives back when the file is deleted. File size is shown
@@ -86,6 +89,10 @@ marked and count zero, so the total matches the volume rather than the sum of
 the names.
 
 **Sizes are base 10 by default**, to match Finder.
+
+**Snapshot sizes are not shown.** Local Time Machine snapshots share blocks
+with live files, so there is no single honest number for what they occupy and
+macOS exposes none. They are listed and can be deleted; no size is invented.
 
 **Permanent delete is off** until switched on in Preferences.
 

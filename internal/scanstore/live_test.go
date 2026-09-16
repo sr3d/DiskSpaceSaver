@@ -2,6 +2,7 @@ package scanstore_test
 
 import (
 	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
@@ -75,7 +76,9 @@ func TestLiveViewportDoesNotStallTheWalk(t *testing.T) {
 		} else if time.Since(stuckSince) > 8*time.Second {
 			buf := make([]byte, 1<<20)
 			n := runtime.Stack(buf, true)
-			os.WriteFile("/private/tmp/claude-501/-Users-ale-projects-github-sr3d-diskspacesaver/5d36559a-5632-4052-88e2-ae46275cb8e5/scratchpad/stall.txt", buf[:n], 0o644)
+			dump := filepath.Join(t.TempDir(), "stall.txt")
+			_ = os.WriteFile(dump, buf[:n], 0o644)
+			t.Logf("goroutine dump written to %s", dump)
 			t.Fatalf("walk stalled at %d nodes for 8s (slowest viewport %s)", files, slowest)
 		}
 		time.Sleep(200 * time.Millisecond)

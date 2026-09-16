@@ -7,8 +7,7 @@
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
   "author": {
-    "name": "Alex Le",
-    "email": "ale@happymoney.com"
+    "name": "sr3d"
   },
   "info": {
     "companyName": "sr3d",

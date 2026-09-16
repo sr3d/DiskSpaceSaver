@@ -131,18 +131,16 @@ func (a *App) HiddenSpace(mount string) (*HiddenSpaceReport, error) {
 // is not exposed anywhere else, and snapshots sharing blocks with live files
 // makes it impossible to derive from the walk.
 func snapshotBytes(mount string) int64 {
-	out, err := exec.Command("/usr/sbin/diskutil", "apfs", "list", "-plist").Output()
+	// macOS exposes no supported figure for what local snapshots occupy —
+	// they share blocks with live files, so there is no single honest number —
+	// and diskutil only reports one on some volume types. Zero here means "not
+	// known", and the panel lists and deletes snapshots without claiming a
+	// size it cannot substantiate.
+	out, err := exec.Command("/usr/sbin/diskutil", "info", mount).Output()
 	if err != nil {
 		return 0
 	}
-	// Rather than parse the whole plist, pull the snapshot totals out of the
-	// human-readable form, which is stable across releases.
-	out2, err := exec.Command("/usr/sbin/diskutil", "info", mount).Output()
-	if err != nil {
-		return 0
-	}
-	_ = out
-	for _, line := range strings.Split(string(out2), "\n") {
+	for _, line := range strings.Split(string(out), "\n") {
 		if !strings.Contains(line, "Snapshot") || !strings.Contains(line, "Bytes") {
 			continue
 		}

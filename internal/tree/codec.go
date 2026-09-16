@@ -185,8 +185,13 @@ func Decode(r io.Reader) (*Tree, error) {
 			pn.Children = append(pn.Children, id)
 		}
 	}
-	// Encode wrote children in their sorted order, so the rebuilt tree is
-	// already sorted; saying so skips a full re-sort on load.
-	t.sorted.Store(true)
+	// Nodes are written in slab order, which is the order the scan discovered
+	// them, not the order Finalize sorted each node's children into — that
+	// sort rearranges child lists, never the slab. So the rebuilt tree must be
+	// sorted again rather than merely declared sorted: a cached scan is drawn
+	// without a rescan, and the viewport's arc cutoff keeps the first N
+	// children, so an unsorted list silently drops the largest folders and
+	// folds them into "other". It costs ~170ms on a million nodes.
+	t.Finalize()
 	return t, nil
 }
