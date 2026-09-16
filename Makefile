@@ -20,13 +20,50 @@ BUILD         ?= $(shell git rev-list --count HEAD 2>/dev/null || echo 0)
 # built from the wrong one makes SMAppService fail without saying why.
 SIGN_ID       ?= $(shell security find-identity -v -p codesigning | head -1 | sed -e 's/^[^"]*"//' -e 's/"$$//')
 NOTARY_PROFILE?= diskspacesaver
+FEED_URL      ?= https://updates.diskspacesaver.app/appcast.xml
 
-BUILD_DIR     := build/bin
-APP_BUNDLE    := $(BUILD_DIR)/$(APP).app
+# Wails always builds into build/bin; releasable artefacts are collected under
+# dist/<platform>/ so each target has one obvious place to look. Windows will
+# land in dist/windows alongside this.
+WAILS_OUT     := build/bin
+DIST          := dist
+DIST_MAC      := $(DIST)/macos
+APP_BUNDLE    := $(DIST_MAC)/$(APP).app
+ZIP           := $(DIST_MAC)/$(APP)-$(VERSION).zip
 WAILS         := $(shell command -v wails 2>/dev/null || echo $(HOME)/go/bin/wails)
 LDFLAGS       := -X main.Version=$(VERSION) -X main.Build=$(BUILD)
 
-.PHONY: all help dev test race lint scan helper app sign verify notarize staple zip dmg release clean bindings
+# Sparkle powers the in-app updater. It is fetched rather than committed; the
+# build tag only switches on once the framework is actually present, so a
+# checkout without it still builds and runs.
+#
+# Not under vendor/ — that directory name is reserved by the Go toolchain,
+# which switches the whole module into vendored-dependency mode as soon as it
+# appears and then fails because there is no modules.txt.
+SPARKLE_VERSION := 2.6.4
+SPARKLE_DIR     := third_party/Sparkle
+SPARKLE_FW      := $(SPARKLE_DIR)/Sparkle.framework
+GO_TAGS       := $(if $(wildcard $(SPARKLE_FW)),sparkle,)
+
+# cgo vets linker flags against an allowlist that excludes @executable_path.
+# The updater needs an rpath into the bundle's Frameworks directory, so that
+# one pattern is permitted explicitly rather than the check being disabled.
+export CGO_LDFLAGS_ALLOW := -Wl,-rpath,.*
+
+# Sparkle's public key, substituted into Info.plist at package time. It is not
+# a secret — it is the half that verifies — but it is per-project, so it comes
+# from the environment or .env rather than being committed to a template.
+SPARKLE_PUBLIC_KEY ?=
+
+# An ad-hoc signature ("-") carries no Team ID, so a build signed that way can
+# never install the privileged helper. CI uses it anyway: it exercises the
+# whole packaging path — helper placement, framework embedding, plist edits —
+# which is where breakages actually happen, and a pull request has no access to
+# the real identity. Such a build warns instead of failing, and is never
+# something to ship.
+ADHOC := $(if $(filter -,$(SIGN_ID)),1,)
+
+.PHONY: all help dev test race lint scan helper app sign verify notarize staple zip release clean bindings icons sparkle dist-dirs
 
 help:
 	@echo "DiskSpaceSaver $(VERSION) (build $(BUILD))"
@@ -36,18 +73,23 @@ help:
 	@echo "  make race       unit tests under the race detector"
 	@echo "  make scan       build the scanner CLI into bin/scan"
 	@echo "  make helper     build the privileged helper into bin/"
-	@echo "  make app        build and sign $(APP).app with the helper embedded"
+	@echo "  make app        build and sign $(DIST_MAC)/$(APP).app"
 	@echo "  make verify     check the bundle's signature and helper placement"
+	@echo "  make icons      re-render the icon from docs/diskspacesaver-icon.svg"
+	@echo "  make sparkle    vendor Sparkle $(SPARKLE_VERSION), enabling the updater"
 	@echo "  make release    app + notarize + staple + zip (needs a Developer ID)"
 	@echo
-	@echo "  TEAM_ID=$(TEAM_ID)"
-	@echo "  SIGN_ID=$(SIGN_ID)"
+	@echo "  output      $(DIST_MAC)/"
+	@echo "  SIGN_ID     $(SIGN_ID)"
+	@echo "  updater     $(if $(GO_TAGS),Sparkle vendored — updater enabled,not vendored — run make sparkle)"
 
 all: app
 
 dev:
 	$(WAILS) dev
 
+# Built without the updater on purpose: binding generation runs a throwaway
+# binary outside the bundle, where a linked Sparkle cannot be found.
 bindings:
 	$(WAILS) generate module
 
@@ -69,11 +111,45 @@ helper:
 
 # ---------------------------------------------------------------- packaging
 
-$(APP_BUNDLE): helper
-	$(WAILS) build -platform darwin/universal -ldflags "$(LDFLAGS)" -trimpath -clean
+dist-dirs:
+	@mkdir -p $(DIST_MAC) $(DIST)/windows
+
+icons:
+	./scripts/make-icons.sh
+
+# Vendors Sparkle. Nothing here is committed: the framework is 30 MB of
+# third-party binary, and pinning the version is enough to make the build
+# reproducible.
+sparkle:
+	@if [ -d "$(SPARKLE_FW)" ]; then echo "Sparkle $(SPARKLE_VERSION) already vendored"; exit 0; fi; 	echo ">> fetching Sparkle $(SPARKLE_VERSION)"; 	mkdir -p $(SPARKLE_DIR) bin/sparkle; 	tmp=$$(mktemp -d); 	curl -fsSL -o "$$tmp/sparkle.tar.xz" 	  "https://github.com/sparkle-project/Sparkle/releases/download/$(SPARKLE_VERSION)/Sparkle-$(SPARKLE_VERSION).tar.xz"; 	tar -xJf "$$tmp/sparkle.tar.xz" -C "$$tmp"; 	cp -R "$$tmp/Sparkle.framework" $(SPARKLE_DIR)/; 	cp "$$tmp/bin/sign_update" "$$tmp/bin/generate_keys" bin/sparkle/ 2>/dev/null || true; 	rm -rf "$$tmp"; 	echo ">> vendored to $(SPARKLE_FW); rebuild to enable the updater"
+
+$(APP_BUNDLE): helper dist-dirs
+	@# -skipbindings: Wails generates them by running a throwaway binary out of
+	@# /tmp, which cannot resolve an rpath into the app bundle and aborts as
+	@# soon as Sparkle is linked. They are committed; `make bindings` refreshes
+	@# them, building without the updater.
+	$(WAILS) build -platform darwin/universal -ldflags "$(LDFLAGS)" -trimpath -clean -skipbindings 		$(if $(GO_TAGS),-tags $(GO_TAGS),)
+	@echo ">> collecting into $(DIST_MAC)"
+	rm -rf "$(APP_BUNDLE)"
+	mv "$(WAILS_OUT)/$(APP).app" "$(APP_BUNDLE)"
+	@echo ">> icon"
+	cp build/darwin/iconfile.icns "$(APP_BUNDLE)/Contents/Resources/iconfile.icns"
+	@# Substituted after packaging because Wails renders Info.plist itself.
+	@# Left as the placeholder when no key is configured, which Sparkle reads
+	@# as an invalid key and refuses every update — the safe direction to fail.
+	@if [ -n "$(SPARKLE_PUBLIC_KEY)" ]; then \
+		echo ">> update signing key"; \
+		plutil -replace SUPublicEDKey -string "$(SPARKLE_PUBLIC_KEY)" \
+			"$(APP_BUNDLE)/Contents/Info.plist"; \
+		plutil -replace SUFeedURL -string "$(FEED_URL)" \
+			"$(APP_BUNDLE)/Contents/Info.plist"; \
+	else \
+		echo ">> no SPARKLE_PUBLIC_KEY set: updates will be refused by this build"; \
+	fi
 	@echo ">> embedding the privileged helper"
 	mkdir -p "$(APP_BUNDLE)/Contents/Library/LaunchDaemons"
 	cp bin/$(HELPER_BIN) "$(APP_BUNDLE)/Contents/MacOS/$(HELPER_BIN)"
+	@if [ -d "$(SPARKLE_FW)" ]; then 		echo ">> embedding Sparkle $(SPARKLE_VERSION)"; 		mkdir -p "$(APP_BUNDLE)/Contents/Frameworks"; 		rm -rf "$(APP_BUNDLE)/Contents/Frameworks/Sparkle.framework"; 		cp -R "$(SPARKLE_FW)" "$(APP_BUNDLE)/Contents/Frameworks/"; 	fi
 
 app: $(APP_BUNDLE) sign
 
@@ -85,6 +161,10 @@ app: $(APP_BUNDLE) sign
 # and it has to be in place before the outer signature seals the bundle.
 sign:
 	@test -n "$(SIGN_ID)" || (echo "SIGN_ID is empty: no codesigning identity found"; exit 1)
+	@# Sparkle ships its own nested executables — an XPC service and the
+	@# installer — and the hardened runtime rejects any that is unsigned or
+	@# signed by someone else. They go first, deepest first.
+	@if [ -d "$(APP_BUNDLE)/Contents/Frameworks/Sparkle.framework" ]; then 		echo ">> signing Sparkle"; 		find "$(APP_BUNDLE)/Contents/Frameworks/Sparkle.framework" 			\( -name "*.xpc" -o -name "*.app" \) -print0 		| xargs -0 -I{} codesign --force --options runtime --timestamp 			--sign "$(SIGN_ID)" "{}"; 		codesign --force --options runtime --timestamp 			--sign "$(SIGN_ID)" 			"$(APP_BUNDLE)/Contents/Frameworks/Sparkle.framework"; 	fi
 	@echo ">> signing the helper as $(SIGN_ID)"
 	codesign --force --options runtime --timestamp \
 		--sign "$(SIGN_ID)" \
@@ -93,7 +173,12 @@ sign:
 	@team=$$(codesign -dv --verbose=4 "$(APP_BUNDLE)/Contents/MacOS/$(HELPER_BIN)" 2>&1 \
 		| sed -n 's/^TeamIdentifier=//p'); \
 	if [ -z "$$team" ] || [ "$$team" = "not set" ]; then \
-		echo "the signature carries no Team ID; SMAppService cannot install this helper"; exit 1; \
+		if [ -n "$(ADHOC)" ]; then \
+			echo ">> ad-hoc signature: no Team ID, so this build cannot install the helper"; \
+			team="ADHOCNOTEAM"; \
+		else \
+			echo "the signature carries no Team ID; SMAppService cannot install this helper"; exit 1; \
+		fi; \
 	fi; \
 	echo ">> daemon plist for team $$team"; \
 	sed "s/@TEAM_ID@/$$team/g" build/darwin/helper.plist.in \
@@ -129,31 +214,44 @@ verify:
 	plistteam=$$(sed -n 's/.*<string>\([A-Z0-9]\{10\}\)<\/string>.*/\1/p' \
 		"$(APP_BUNDLE)/Contents/Library/LaunchDaemons/$(HELPER_LABEL).plist" | head -1); \
 	echo "   app    $$appteam"; echo "   helper $$helpteam"; echo "   plist  $$plistteam"; \
-	[ "$$appteam" = "$$helpteam" ] || { echo "   app and helper teams differ: SMAppService will fail silently"; exit 1; }; \
-	[ "$$plistteam" = "$$appteam" ] || { echo "   the plist names a different team than the signature"; exit 1; }
+	if [ -n "$(ADHOC)" ]; then \
+		echo "   ad-hoc build: no team, the helper cannot be installed from it"; \
+	else \
+		[ "$$appteam" = "$$helpteam" ] || { echo "   app and helper teams differ: SMAppService will fail silently"; exit 1; }; \
+		[ "$$plistteam" = "$$appteam" ] || { echo "   the plist names a different team than the signature"; exit 1; }; \
+	fi
+	@echo ">> updater"
+	@if [ -d "$(APP_BUNDLE)/Contents/Frameworks/Sparkle.framework" ]; then \
+		key=$$(plutil -extract SUPublicEDKey raw "$(APP_BUNDLE)/Contents/Info.plist" 2>/dev/null); \
+		echo "   Sparkle embedded"; \
+		case "$$key" in \
+			@SPARKLE_PUBLIC_KEY@|"") echo "   NO public key: this build will refuse every update";; \
+			*) echo "   public key set ($${key%$${key#????}}…)";; \
+		esac; \
+	else echo "   not built with the updater (run make sparkle)"; fi
 	@echo ">> gatekeeper (rejects until notarised; expected for a local build)"
 	-@spctl --assess --type execute --verbose=2 "$(APP_BUNDLE)" 2>&1 | sed 's/^/   /'
 
 # ---------------------------------------------------------------- release
 
-zip:
+zip: dist-dirs
 	@echo ">> zipping with ditto so the signature survives"
-	ditto -c -k --keepParent "$(APP_BUNDLE)" "$(BUILD_DIR)/$(APP)-$(VERSION).zip"
+	ditto -c -k --keepParent "$(APP_BUNDLE)" "$(ZIP)"
 
 notarize: zip
-	xcrun notarytool submit "$(BUILD_DIR)/$(APP)-$(VERSION).zip" \
+	xcrun notarytool submit "$(ZIP)" \
 		--keychain-profile "$(NOTARY_PROFILE)" --wait
 
 staple:
 	xcrun stapler staple "$(APP_BUNDLE)"
 	@echo ">> re-zipping the stapled bundle"
-	rm -f "$(BUILD_DIR)/$(APP)-$(VERSION).zip"
-	ditto -c -k --keepParent "$(APP_BUNDLE)" "$(BUILD_DIR)/$(APP)-$(VERSION).zip"
+	rm -f "$(ZIP)"
+	ditto -c -k --keepParent "$(APP_BUNDLE)" "$(ZIP)"
 
 release: app verify notarize staple
 	@echo
-	@echo "Built, notarised and stapled: $(BUILD_DIR)/$(APP)-$(VERSION).zip"
+	@echo "Built, notarised and stapled: $(ZIP)"
 	@echo "Next: ./scripts/release.sh $(VERSION) to sign the appcast and publish."
 
 clean:
-	rm -rf build/bin bin frontend/dist
+	rm -rf $(DIST) $(WAILS_OUT) bin frontend/dist

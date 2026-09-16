@@ -5,8 +5,14 @@
 package updater
 
 /*
-#cgo CFLAGS: -x objective-c -fobjc-arc
+#cgo CFLAGS: -x objective-c -fobjc-arc -F${SRCDIR}/../../third_party/Sparkle
 #cgo LDFLAGS: -framework Foundation -framework AppKit
+#cgo LDFLAGS: -F${SRCDIR}/../../third_party/Sparkle -framework Sparkle
+// The framework is embedded in the bundle, so the loader is pointed at
+// Contents/Frameworks rather than at wherever it sat during the build. cgo
+// keeps an allowlist of linker flags and @executable_path is not on it, so the
+// Makefile sets CGO_LDFLAGS_ALLOW for this one.
+#cgo LDFLAGS: -Wl,-rpath,@executable_path/../Frameworks
 #include <stdlib.h>
 #include "sparkle_darwin.h"
 */

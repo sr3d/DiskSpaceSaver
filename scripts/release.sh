@@ -32,7 +32,7 @@ UPDATE_HOST="${UPDATE_HOST:-https://updates.diskspacesaver.app}"
 
 APP="DiskSpaceSaver"
 BUILD="$(git rev-list --count HEAD)"
-OUT="build/bin"
+OUT="dist/macos"
 ZIP="$OUT/$APP-$VERSION.zip"
 
 say() { printf '\n== %s\n' "$*"; }
@@ -45,6 +45,9 @@ fi
 
 say "tests"
 go test ./...
+
+say "vendoring Sparkle if needed"
+make sparkle
 
 say "building and signing $APP $VERSION (build $BUILD)"
 make app VERSION="$VERSION" BUILD="$BUILD"

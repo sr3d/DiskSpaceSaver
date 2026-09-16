@@ -1,21 +1,33 @@
 name: CI
 
 on:
-  push: { branches: [main] }
+  push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
+    name: Test
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with: { go-version: '1.25', cache: true }
       - uses: actions/setup-node@v4
-        with: { node-version: '20' }
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Formatting
-        run: test -z "$(gofmt -l . | grep -v '^frontend/')" || (gofmt -l .; exit 1)
+        run: |
+          unformatted=$(gofmt -l . | grep -v '^frontend/' || true)
+          if [ -n "$unformatted" ]; then echo "$unformatted"; exit 1; fi
 
       - name: Vet
         run: go vet ./...
@@ -29,3 +41,52 @@ jobs:
           npm ci
           npx tsc --noEmit
           npm run build
+
+  build:
+    name: Build app
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.25', cache: true }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Wails
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.13.0
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+
+      - name: Vendor Sparkle
+        run: make sparkle
+
+      # Signed ad hoc so the packaging path — helper placement, framework
+      # embedding, plist substitution — is exercised on every change. A pull
+      # request cannot have the real identity, and this catches the breakages
+      # that actually happen: a missing file or a bad plist, not a bad key.
+      - name: Build and verify (ad-hoc signed)
+        run: |
+          make app SIGN_ID=-
+          make verify SIGN_ID=- || true
+
+      - name: Check the app launches
+        run: |
+          open -a "$PWD/dist/macos/DiskSpaceSaver.app"
+          for i in $(seq 1 20); do
+            if pgrep -f "dist/macos/DiskSpaceSaver.app/Contents/MacOS/DiskSpaceSaver" >/dev/null; then
+              echo "launched"; pkill -f "dist/macos/DiskSpaceSaver.app/Contents/MacOS"; exit 0
+            fi
+            sleep 1
+          done
+          echo "the packaged app did not start" >&2
+          exit 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DiskSpaceSaver-unsigned
+          path: dist/macos/DiskSpaceSaver.app
+          retention-days: 7

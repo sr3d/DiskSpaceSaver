@@ -55,6 +55,17 @@
         <string>DiskSpaceSaver scans removable volumes you choose.</string>
         <key>SUFeedURL</key>
         <string>https://updates.diskspacesaver.app/appcast.xml</string>
+        <!-- Sparkle verifies every download against this key and refuses to
+             install anything that does not match. Generated once with
+             bin/sparkle/generate_keys; the private half stays in the keychain
+             and never reaches the repository. Empty until then, which Sparkle
+             treats as "refuse everything". -->
+        <key>SUPublicEDKey</key>
+        <string>@SPARKLE_PUBLIC_KEY@</string>
+        <key>SUScheduledCheckInterval</key>
+        <integer>86400</integer>
+        <key>SUAutomaticallyUpdate</key>
+        <false/>
         <key>SUEnableInstallerLauncherService</key>
         <true/>
         {{if .Info.FileAssociations}}

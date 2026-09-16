@@ -1,21 +1,25 @@
-//go:build ignore
-//
+//go:build darwin && sparkle
+
 // Sparkle bridge.
 //
-// Sparkle is loaded at runtime rather than linked, so a build without
-// Sparkle.framework in Contents/Frameworks still runs — it simply reports the
-// updater as unavailable. That keeps `wails dev` and unsigned local builds
-// working, where an updater could not function anyway.
+// The constraint above matters: Go applies build constraints to Objective-C
+// files as well as Go ones, and a package with a .m file but no cgo file is
+// rejected outright. Without the tag this file is excluded, the package is
+// pure Go, and the updater reports itself unavailable.
 //
-// Built only under the `sparkle` build tag; see driver_sparkle.go.
+// Sparkle is linked, not looked up at runtime, because the tag and the
+// framework travel together: the Makefile only sets the tag when the framework
+// is present, and embeds it in the bundle when it is.
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <Sparkle/Sparkle.h>
 #include "sparkle_darwin.h"
 #include "_cgo_export.h"
 
-static id gController;          // SPUStandardUpdaterController
-static id gDelegate;            // DSSSparkleDelegate
+static SPUStandardUpdaterController *gController;
+static id gDelegate;
+static NSString *gFeedURL;
 static NSString *gLatest;
 static NSString *gNotes;
 static NSString *gDownloadURL;
@@ -27,84 +31,67 @@ static char *dupstr(NSString *s) {
     return c ? strdup(c) : NULL;
 }
 
-static Class sparkleClass(NSString *name) {
-    Class c = NSClassFromString(name);
-    if (c != nil) return c;
-    // Load the framework from the bundle on first use.
-    NSString *path = [[[NSBundle mainBundle] privateFrameworksPath]
-                      stringByAppendingPathComponent:@"Sparkle.framework"];
-    NSBundle *fw = [NSBundle bundleWithPath:path];
-    if (fw != nil && [fw load]) return NSClassFromString(name);
-    return nil;
-}
-
-bool dss_sparkle_available(void) {
-    return sparkleClass(@"SPUStandardUpdaterController") != nil;
-}
-
-// DSSSparkleDelegate forwards Sparkle's lifecycle to Go, which reports it to
-// the update service. The events are what make a broken release visible:
-// without them a failed install is indistinguishable from nobody updating.
-@interface DSSSparkleDelegate : NSObject
+// Forwards Sparkle's lifecycle to Go, which reports it to the update service.
+// These events are what make a broken release visible: without them a failed
+// install looks exactly like nobody choosing to update.
+@interface DSSSparkleDelegate : NSObject <SPUUpdaterDelegate>
 @end
 
 @implementation DSSSparkleDelegate
 
-- (void)updater:(id)updater didFindValidUpdate:(id)item {
-    @try {
-        gLatest = [[item valueForKey:@"displayVersionString"] copy];
-        gNotes = [[item valueForKey:@"itemDescription"] copy];
-        gDownloadURL = [[[item valueForKey:@"fileURL"] absoluteString] copy];
-        gUpdateAvailable = YES;
-    } @catch (NSException *e) { /* a future Sparkle may rename these */ }
+// Supplying the feed here rather than through the deprecated setter keeps the
+// channel selectable at runtime while Info.plist still carries a default.
+- (nullable NSString *)feedURLStringForUpdater:(SPUUpdater *)updater {
+    return gFeedURL.length ? gFeedURL : nil;
+}
+
+- (void)updater:(SPUUpdater *)updater didFindValidUpdate:(SUAppcastItem *)item {
+    gLatest = [item.displayVersionString copy];
+    gNotes = [item.itemDescription copy];
+    gDownloadURL = [item.fileURL.absoluteString copy];
+    gUpdateAvailable = YES;
     goSparkleEvent((char *)"didFindValidUpdate",
                    (char *)[(gLatest ?: @"") UTF8String], (char *)"");
 }
 
-- (void)updaterDidNotFindUpdate:(id)updater {
+- (void)updaterDidNotFindUpdate:(SPUUpdater *)updater {
     gUpdateAvailable = NO;
     goSparkleEvent((char *)"didNotFindUpdate", (char *)"", (char *)"");
 }
 
-- (void)updater:(id)updater userDidSkipThisVersion:(id)item {
-    goSparkleEvent((char *)"userDidSkip", (char *)"", (char *)"");
+- (void)updater:(SPUUpdater *)updater willInstallUpdate:(SUAppcastItem *)item {
+    goSparkleEvent((char *)"willInstallUpdate", (char *)"",
+                   (char *)[(item.displayVersionString ?: @"") UTF8String]);
 }
 
-- (void)updater:(id)updater willInstallUpdate:(id)item {
-    goSparkleEvent((char *)"willInstallUpdate", (char *)"", (char *)"");
-}
-
-- (void)updater:(id)updater didFinishUpdateCycleForUpdateCheck:(NSInteger)check error:(NSError *)error {
+- (void)updater:(SPUUpdater *)updater
+    didFinishUpdateCycleForUpdateCheck:(SPUUpdateCheck)updateCheck
+                                 error:(nullable NSError *)error {
     goSparkleEvent((char *)"didFinishUpdateCycle", (char *)"",
-                   (char *)[([error localizedDescription] ?: @"") UTF8String]);
+                   (char *)[(error.localizedDescription ?: @"") UTF8String]);
 }
 
 @end
 
+bool dss_sparkle_available(void) { return true; }
+
 char *dss_sparkle_start(const char *feed_url) {
     @autoreleasepool {
-        Class cls = sparkleClass(@"SPUStandardUpdaterController");
-        if (cls == nil) return dupstr(@"Sparkle.framework is not present in this build");
         if (gController != nil) return NULL;
+        if (feed_url != NULL && *feed_url) gFeedURL = @(feed_url);
 
         gDelegate = [DSSSparkleDelegate new];
-        // startingUpdater:NO so the feed can be set before the first check.
-        gController = [[cls alloc] initWithStartingUpdater:NO
-                                          updaterDelegate:gDelegate
-                                       userDriverDelegate:nil];
-        id updater = [gController valueForKey:@"updater"];
-        if (feed_url != NULL && *feed_url) {
-            @try {
-                [updater setValue:[NSURL URLWithString:@(feed_url)] forKey:@"feedURL"];
-            } @catch (NSException *e) { /* SUFeedURL from Info.plist is used instead */ }
-        }
-        NSError *err = nil;
+        // startingUpdater:NO so the delegate is in place before the first
+        // check, which is what lets the feed URL above take effect.
+        gController = [[SPUStandardUpdaterController alloc]
+            initWithStartingUpdater:NO
+                    updaterDelegate:gDelegate
+                 userDriverDelegate:nil];
         @try {
-            [gController performSelector:@selector(startUpdater)];
+            [gController startUpdater];
         } @catch (NSException *e) {
             return dupstr([e reason] ?: @"Sparkle failed to start");
         }
-        (void)err;
         return NULL;
     }
 }
@@ -113,11 +100,12 @@ char *dss_sparkle_check(bool user_initiated) {
     @autoreleasepool {
         if (gController == nil) return dupstr(@"the updater has not started");
         dispatch_async(dispatch_get_main_queue(), ^{
+            // A user-initiated check shows Sparkle's own progress and result
+            // windows; a background one stays silent unless there is an update.
             if (user_initiated) {
-                [gController performSelector:@selector(checkForUpdates:) withObject:nil];
+                [gController checkForUpdates:nil];
             } else {
-                id updater = [gController valueForKey:@"updater"];
-                [updater performSelector:@selector(checkForUpdatesInBackground)];
+                [gController.updater checkForUpdatesInBackground];
             }
         });
         return NULL;
@@ -127,10 +115,10 @@ char *dss_sparkle_check(bool user_initiated) {
 char *dss_sparkle_install(void) {
     @autoreleasepool {
         if (gController == nil) return dupstr(@"the updater has not started");
-        // Sparkle drives download, signature verification, atomic replacement
-        // and relaunch itself; there is nothing for us to do but ask.
+        // Sparkle owns download, signature verification, atomic replacement and
+        // relaunch; there is nothing to do here but ask it to proceed.
         dispatch_async(dispatch_get_main_queue(), ^{
-            [gController performSelector:@selector(checkForUpdates:) withObject:nil];
+            [gController checkForUpdates:nil];
         });
         return NULL;
     }
