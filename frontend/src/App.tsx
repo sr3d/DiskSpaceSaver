@@ -455,6 +455,22 @@ export default function App() {
         {s.showCollector && <Collector base2={base2} />}
       </main>
 
+      {/* Drop feedback. The Wails runtime already marks every element whose
+          computed --wails-drop-target is "drop" with .wails-drop-target-active
+          while a file drag is over the window, and clears it on leave or drop,
+          so this needs no listener of its own — only CSS keyed off the class
+          the runtime sets on .app.
+
+          aria-hidden because it is transient feedback during a pointer drag,
+          with no keyboard equivalent to announce; "Add a Folder" is the path
+          that does not need a mouse. */}
+      <div className="dropzone" aria-hidden>
+        <div className="dropzone-card">
+          <strong>Drop to scan</strong>
+          <span>A folder opens as a new scan · a file opens the folder it is in</span>
+        </div>
+      </div>
+
       {s.showPrefs && <Preferences />}
       {s.hiddenSpaceMount && <HiddenSpace mount={s.hiddenSpaceMount} base2={base2} />}
       <ConfirmSheet />

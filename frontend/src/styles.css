@@ -19,6 +19,10 @@
   --line-strong: rgba(20, 22, 28, 0.2);
   --accent: #2f6df0;
   --accent-fg: #ffffff;
+  /* Tinted with the accent rather than plain black or white: a grey scrim
+     reads as the window being disabled, which is the opposite of what a drop
+     target is saying. */
+  --drop-wash: rgba(47, 109, 240, 0.1);
   --danger: #d1372f;
   --warn: #b26a00;
   --ok: #1a7f4b;
@@ -64,6 +68,7 @@
   --line: rgba(255, 255, 255, 0.09);
   --line-strong: rgba(255, 255, 255, 0.17);
   --accent: #5b8cff;
+  --drop-wash: rgba(91, 140, 255, 0.16);
   --danger: #ff6b60;
   --warn: #e3a13c;
   --ok: #4ad189;
@@ -139,6 +144,47 @@ kbd {
 }
 .tab-spin { width: 10px; height: 10px; border-width: 1.5px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------------------------------------------------------------- drop */
+
+/* Shown only while a file drag is over the window. The class is put there by
+   the Wails runtime, which walks up from the element under the cursor marking
+   everything whose --wails-drop-target is "drop" — and that property is a
+   custom property, so it inherits from .app to the whole window. Matching on
+   .app alone keeps the styling to the one element that means the window.
+
+   pointer-events: none is not decoration: an overlay that took the pointer
+   would sit between the cursor and the element the runtime reads the drop
+   target from, and the drop it is advertising would stop working. */
+.dropzone {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  background: var(--drop-wash);
+  border: 2px dashed var(--accent);
+  border-radius: 10px;
+}
+.app.wails-drop-target-active .dropzone { display: flex; }
+
+.dropzone-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 26px;
+  border-radius: 12px;
+  background: var(--bg-raised);
+  box-shadow: var(--shadow);
+  text-align: center;
+  max-width: min(420px, 90%);
+}
+.dropzone-card strong { font-size: 16px; font-weight: 650; }
+.dropzone-card span { color: var(--fg-dim); font-size: 12px; line-height: 1.5; }
 
 /* ---------------------------------------------------------------- titlebar */
 
