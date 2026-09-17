@@ -78,6 +78,9 @@ GB macOS reports as purgeable lands within **0.73%** of Finder's used figure.
 | `⌘I` · `⌘⇧R` · `⌘O` | Get Info · Show in Finder · Open |
 | `⌘A` | tick every row in this folder |
 | `⌘D` | watch in the monitor |
+| `↑` `↓` · `→` `←` | move through the list · go into a folder · come back out |
+| `Space` · `⌘Y` | tick the row · Quick Look |
+| `0`–`5` | size filter: all · 1 MB · 10 MB · 100 MB · 1 GB · 5 GB |
 | `⌘⌫` / `⌘⌥⌫` | Trash · delete permanently |
 | `⌘T` · `⌘R` · `⌘L` · `⌘,` | new scan · rescan the current folder · monitor · preferences |
 

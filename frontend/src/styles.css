@@ -492,7 +492,15 @@ kbd {
 
 .scanbody { flex: 1; min-height: 0; display: flex; position: relative; }
 
-.sunburst-wrap { flex: 1 1 auto; min-width: 240px; position: relative; display: flex; }
+/* The chart plus the controls drawn over it. The flex sizing that used to be
+   on .sunburst-wrap lives here now, because this is what .scanbody lays out. */
+.chartarea {
+  flex: 1 1 auto;
+  min-width: 240px;
+  position: relative;
+  display: flex;
+}
+.sunburst-wrap { flex: 1 1 auto; min-width: 0; position: relative; display: flex; }
 .sunburst { display: block; width: 100%; height: 100%; }
 .sunburst-scanning {
   position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
@@ -605,6 +613,33 @@ kbd {
   border-bottom: 1px solid var(--line);
   font-size: 11.5px; color: var(--fg-dim);
 }
+
+/* Over the chart, near the bottom where the rings are thinnest and there is
+   least to cover. Sized to its content rather than the chart's width, so it
+   reads as a control sitting on the chart and not as a bar across it. */
+.sizefilter-overlay {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 14px;
+  width: min(360px, 82%);
+  z-index: 6;
+  padding: 8px 13px 7px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--bg-raised);
+  box-shadow: var(--shadow);
+  /* Out of the way until wanted: the chart is the thing being read, and a
+     control at full strength over it competes for the eye every time it is
+     not being used. Any pointer or keyboard attention brings it back. */
+  opacity: 0.72;
+  transition: opacity 140ms ease;
+}
+.sizefilter-overlay:hover,
+.sizefilter-overlay:focus-within { opacity: 1; }
+/* Stacked, the chart is short and a floating control would cover the middle
+   of it, so the filter goes back to being part of the list column. */
+[data-layout='narrow'] .sizefilter-overlay { bottom: 8px; width: min(340px, 92%); }
 .sizefilter-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .sizefilter-row label { cursor: default; }
 .sizefilter-value {
@@ -906,7 +941,7 @@ kbd {
 /* Then, when even two columns will not fit, the sidebar moves below the chart
    rather than squeezing it out sideways. */
 [data-layout='narrow'] .scanbody { flex-direction: column; }
-[data-layout='narrow'] .sunburst-wrap { flex: 1 1 58%; min-height: 200px; min-width: 0; }
+[data-layout='narrow'] .chartarea { flex: 1 1 58%; min-height: 200px; min-width: 0; }
 [data-layout='narrow'] .sidecol {
   flex: 1 1 42%;
   width: auto !important;   /* the drag width is meaningless when stacked */

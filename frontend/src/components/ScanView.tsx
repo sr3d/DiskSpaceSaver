@@ -616,6 +616,11 @@ export function ScanView({ scan, palette, dark }: Props) {
       </div>
 
       <div className="scanbody">
+        {/* The chart and the controls that belong to it. The size filter used
+            to sit above the list, where it pushed the rows down and read as a
+            property of the list; it filters the chart just as much, and the
+            chart has room to spare. */}
+        <div className="chartarea">
         <Sunburst
           slice={slice}
           rootLabel={scan.label}
@@ -633,10 +638,11 @@ export function ScanView({ scan, palette, dark }: Props) {
           onZoomOut={zoomOut}
           onContextMenu={(arc, x, y) => arc.id !== 0 && setMenu({ x, y, id: arc.id })}
         />
+          <SizeFilter base2={base2} hidden={hidden} overlay />
+        </div>
 
         <SidebarColumn scanID={scan.id} base2={base2} uiScale={uiScale}>
           {inspectorInline && inspector}
-          <SizeFilter base2={base2} hidden={hidden} />
           <Sidebar
           rows={rows}
           checked={checked}

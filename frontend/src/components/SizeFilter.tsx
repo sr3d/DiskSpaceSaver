@@ -31,12 +31,30 @@ export function stopIndex(list: number[], bytes: number): number {
   return best;
 }
 
+/**
+ * The digit shortcuts, as a ladder of decades rather than one key per stop.
+ * Six keys cover the whole useful range and each is a round number the user
+ * can hold in their head; nine keys onto every stop would be more reach for
+ * less meaning, and "press 7 for 100 MB" is not a thing anyone remembers.
+ *
+ * Each rung is an existing stop, so the slider lands exactly on it.
+ */
+export function shortcutBytes(digit: number, base2: boolean): number | null {
+  const k = base2 ? 1024 : 1000;
+  const m = k * k;
+  const g = m * k;
+  const ladder = [0, 1 * m, 10 * m, 100 * m, 1 * g, 5 * g];
+  return digit >= 0 && digit < ladder.length ? ladder[digit] : null;
+}
+
 interface Props {
   base2: boolean;
   hidden: { count: number; bytes: number };
+  /** Rendered over the chart rather than stacked in the list column. */
+  overlay?: boolean;
 }
 
-export function SizeFilter({ base2, hidden }: Props) {
+export function SizeFilter({ base2, hidden, overlay }: Props) {
   const prefs = useStore((s) => s.prefs);
   const setPrefs = useStore((s) => s.setPrefs);
   const stored = prefs?.minItemSize ?? 0;
@@ -57,9 +75,37 @@ export function SizeFilter({ base2, hidden }: Props) {
     }
   };
 
+  // The digit shortcuts live here rather than in the app's key handler: this
+  // component owns the stops, and a second place that knew the ladder would be
+  // a second place to get it wrong.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      const st = useStore.getState();
+      // A sheet is a question; changing what the view shows behind it is not
+      // an answer.
+      if (st.confirm || st.showPrefs || st.hiddenSpaceMount) return;
+      if (!/^[0-9]$/.test(e.key)) return;
+      const bytes = shortcutBytes(Number(e.key), base2);
+      if (bytes === null) return;
+      e.preventDefault();
+      const i = stopIndex(stops(base2), bytes);
+      setIndex(i);
+      commit(i);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [base2]);
+
   const value = STOPS[index];
   return (
-    <div className="sizefilter">
+    <div
+      className={'sizefilter' + (overlay ? ' sizefilter-overlay' : '')}
+      title="Press 0–5 to step between sizes"
+    >
       <div className="sizefilter-row">
         <label htmlFor="sizefilter-range">Show items over</label>
         <output className="sizefilter-value" htmlFor="sizefilter-range">
