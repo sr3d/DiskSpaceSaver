@@ -84,8 +84,19 @@ cp "$OUT_ICONSET/../out-1024.png" "$OUT_ICONSET/icon_512x512@2x.png"
 iconutil --convert icns --output build/darwin/iconfile.icns "$OUT_ICONSET"
 echo "wrote build/darwin/iconfile.icns"
 
-# Wails generates its own icns and a Windows .ico from this file. Ours replaces
-# the generated icns during packaging; the PNG still drives the Windows icon.
+# Windows. Wails only generates an .ico when none exists, and it downscales a
+# single 1024px source; these are the same native-resolution renders the macOS
+# iconset uses. Entries above 256px are not representable in the directory.
+go run ./cmd/mkicon -o build/windows/icon.ico \
+  "$OUT_ICONSET/../out-16.png" \
+  "$OUT_ICONSET/../out-32.png" \
+  "$OUT_ICONSET/../out-64.png" \
+  "$OUT_ICONSET/../out-128.png" \
+  "$OUT_ICONSET/../out-256.png"
+
+# Wails generates its own icns from this file; ours replaces it during
+# packaging. It is also the source Wails would fall back to for the Windows
+# icon if the .ico above were ever missing.
 cp "$OUT_ICONSET/../out-1024.png" build/appicon.png
 echo "wrote build/appicon.png"
 

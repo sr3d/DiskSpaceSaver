@@ -67,7 +67,7 @@ SPARKLE_PUBLIC_KEY ?=
 # something to ship.
 ADHOC := $(if $(filter -,$(SIGN_ID)),1,)
 
-.PHONY: all help dev test race lint scan helper app sign verify notarize staple zip release clean bindings icons sparkle dist-dirs
+.PHONY: all help dev test race lint scan helper app sign verify notarize staple zip release clean bindings icons sparkle dist-dirs windows windows-verify
 
 help:
 	@echo "DiskSpaceSaver $(VERSION) (build $(BUILD))"
@@ -81,6 +81,7 @@ help:
 	@echo "  make verify     check the bundle's signature and helper placement"
 	@echo "  make icons      re-render the icon from docs/diskspacesaver-icon.svg"
 	@echo "  make sparkle    vendor Sparkle $(SPARKLE_VERSION), enabling the updater"
+	@echo "  make windows    cross-compile the Windows build into $(DIST)/windows/"
 	@echo "  make release    app + notarize + staple + zip (needs a Developer ID)"
 	@echo
 	@echo "  output      $(DIST_MAC)/"
@@ -235,6 +236,48 @@ verify:
 	else echo "   not built with the updater (run make sparkle)"; fi
 	@echo ">> gatekeeper (rejects until notarised; expected for a local build)"
 	-@spctl --assess --type execute --verbose=2 "$(APP_BUNDLE)" 2>&1 | sed 's/^/   /'
+
+# ---------------------------------------------------------------- windows
+
+DIST_WIN := $(DIST)/windows
+WIN_ARCHES ?= windows/amd64,windows/arm64
+
+# Cross-compiles from macOS. Wails compiles its Windows backend as pure Go, and
+# so does our platform layer, so no Windows host and no cgo toolchain are
+# needed to produce the binaries. -tags is left empty on purpose: the updater
+# is Sparkle, which is macOS-only, so a Windows build takes the stub driver.
+windows: dist-dirs
+	@echo ">> building $(WIN_ARCHES)"
+	CGO_ENABLED=0 $(WAILS) build -platform $(WIN_ARCHES) \
+		-ldflags "$(LDFLAGS)" -trimpath -clean -skipbindings
+	@echo ">> collecting into $(DIST_WIN)"
+	@for f in $(WAILS_OUT)/$(APP)*.exe; do \
+		[ -e "$$f" ] || continue; \
+		cp "$$f" "$(DIST_WIN)/"; \
+		echo "   $$(basename $$f)"; \
+	done
+	@ls $(DIST_WIN)/*.exe >/dev/null 2>&1 || { echo "no Windows binary was produced"; exit 1; }
+
+# An installer needs makensis, which Wails only warns about: without this check
+# a release would publish binaries and quietly no installer at all.
+windows-installer: dist-dirs
+	@command -v makensis >/dev/null 2>&1 || { \
+		echo "makensis not found — install it (brew install makensis) or the installer is skipped silently"; \
+		exit 1; }
+	CGO_ENABLED=0 $(WAILS) build -platform $(WIN_ARCHES) \
+		-ldflags "$(LDFLAGS)" -trimpath -clean -skipbindings -nsis
+	@cp $(WAILS_OUT)/*installer.exe $(DIST_WIN)/ 2>/dev/null || true
+	@ls $(DIST_WIN)/*installer.exe
+
+windows-verify:
+	@echo ">> windows build"
+	@ls -la $(DIST_WIN)/*.exe 2>/dev/null || { echo "   nothing built"; exit 1; }
+	@for f in $(DIST_WIN)/*.exe; do \
+		printf "   %-44s " "$$(basename $$f)"; \
+		file -b "$$f" | cut -c1-60; \
+	done
+	@echo ">> the icon and version resources come from build/windows/"
+	@test -f build/windows/icon.ico && echo "   icon.ico present" || echo "   MISSING icon.ico"
 
 # ---------------------------------------------------------------- release
 
