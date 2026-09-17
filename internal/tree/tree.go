@@ -68,8 +68,11 @@ type Tree struct {
 // New creates a tree rooted at rootPath, with the root node already in place.
 func New(rootPath string) *Tree {
 	t := &Tree{RootPath: filepath.Clean(rootPath), dirIndex: make([]uint32, 2)}
+	// filepath.Base gives "/" for a POSIX root, "." for an empty path, and a
+	// bare separator for a Windows drive root like `C:\`. None of those read
+	// as a name, so the whole path is used instead.
 	name := filepath.Base(t.RootPath)
-	if name == "/" || name == "." {
+	if name == "." || name == string(filepath.Separator) || name == "/" {
 		name = t.RootPath
 	}
 	t.Root = t.alloc(Node{Name: name, Kind: uint8(scanner.KindDir), Parent: Invalid})

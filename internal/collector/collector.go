@@ -4,6 +4,7 @@ package collector
 
 import (
 	"fmt"
+	"runtime"
 	"sync"
 )
 
@@ -87,6 +88,9 @@ func (c *Collector) dropDescendantsLocked(it Item) {
 	c.items = kept
 }
 
+// isAncestor reports whether child sits inside parent. The separator check is
+// what stops "/v/about.txt" being treated as a child of "/v/a" — without it the
+// tray would silently drop a sibling whose name merely shares a prefix.
 func isAncestor(parent, child string) bool {
 	if parent == child || parent == "" {
 		return false
@@ -94,7 +98,19 @@ func isAncestor(parent, child string) bool {
 	if len(child) <= len(parent) {
 		return false
 	}
-	return child[:len(parent)] == parent && child[len(parent)] == '/'
+	if child[:len(parent)] != parent {
+		return false
+	}
+	return isSeparator(child[len(parent)])
+}
+
+// isSeparator accepts both separators on Windows, where a path may legitimately
+// arrive with either.
+func isSeparator(c byte) bool {
+	if c == '/' {
+		return true
+	}
+	return runtime.GOOS == "windows" && c == '\\'
 }
 
 // Remove takes one item out of the tray.

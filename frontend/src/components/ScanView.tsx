@@ -13,7 +13,7 @@ import { Sidebar } from './Sidebar';
 import { Inspector } from './Inspector';
 import { SizeFilter } from './SizeFilter';
 import { SidebarColumn } from './SidebarColumn';
-import { BulkBar } from './BulkBar';
+import { SelectionPane } from './SelectionPane';
 import { Sunburst } from './Sunburst';
 import { ContextMenu, MenuItem } from './ContextMenu';
 
@@ -175,6 +175,44 @@ export function ScanView({ scan, palette, dark }: Props) {
   };
 
   const clearChecks = () => setChecked(scan.id, new Set<number>(), 0);
+
+  const uncheck = (id: number) => {
+    const next = new Set(checked);
+    next.delete(id);
+    setChecked(scan.id, next, 0);
+  };
+
+  const collectChecked = () =>
+    act(async () => {
+      await api.collectorAdd(checkedRows.map((r) => ref(r.id)));
+      clearChecks();
+    }, 'Could not collect those items');
+
+  // The pane is only ever shown for ticks that still exist, so unticking the
+  // last row or walking to another folder puts it away without anything here
+  // having to remember to close it.
+  const selectionOpen = (tab?.selectionOpen ?? false) && checkedRows.length > 0;
+
+  // Opens the pane on the first tick, and puts the flag back when the last one
+  // goes — deleting, collecting or unticking all empty the selection without
+  // going near the flag, and a flag left set would let an Escape press be
+  // swallowed by a pane that is not on screen.
+  //
+  // The edge is taken from the stored tick set rather than the visible rows:
+  // a reload momentarily empties the list, and counting that as "none ticked"
+  // would re-open a pane the user had just closed. Seeded with the count at
+  // mount for the same reason, so coming back to a tab that already has ticks
+  // does not re-open it either.
+  const tickCount = checked.size;
+  const prevTicks = useRef(tickCount);
+  useEffect(() => {
+    const was = prevTicks.current;
+    prevTicks.current = tickCount;
+    if (tickCount > 0 && was === 0) patchTab(scan.id, { selectionOpen: true });
+    else if (checkedRows.length === 0 && (tab?.selectionOpen ?? false)) {
+      patchTab(scan.id, { selectionOpen: false });
+    }
+  }, [tickCount, checkedRows.length, tab?.selectionOpen, scan.id, patchTab]);
 
   /** What a delete or collect should act on: the ticked rows, or the selection. */
   const bulkTargets = () =>
@@ -466,21 +504,6 @@ export function ScanView({ scan, palette, dark }: Props) {
         <SidebarColumn scanID={scan.id} base2={base2} uiScale={uiScale}>
           {inspectorInline && inspector}
           <SizeFilter base2={base2} hidden={hidden} />
-          <BulkBar
-            count={checkedRows.length}
-            bytes={checkedBytes}
-            base2={base2}
-            allowPermanent={prefs?.allowPermanentDelete ?? false}
-            onCollect={() =>
-              act(async () => {
-                await api.collectorAdd(checkedRows.map((r) => ref(r.id)));
-                clearChecks();
-              }, 'Could not collect those items')
-            }
-            onTrash={() => doTrash(checkedRows.map((r) => r.id))}
-            onDeleteForever={() => doDeleteForever(checkedRows.map((r) => r.id))}
-            onClear={clearChecks}
-          />
           <Sidebar
           rows={rows}
           checked={checked}
@@ -500,16 +523,60 @@ export function ScanView({ scan, palette, dark }: Props) {
           />
         </SidebarColumn>
         {!inspectorInline && inspector}
+
+        {selectionOpen && (
+          <SelectionPane
+            rows={checkedRows}
+            indexOf={(id) => rows.findIndex((r) => r.id === id)}
+            bytes={checkedBytes}
+            where={trail[trail.length - 1]?.name ?? scan.label}
+            base2={base2}
+            palette={palette}
+            dark={dark}
+            allowPermanent={prefs?.allowPermanentDelete ?? false}
+            hovered={tab?.hovered ?? 0}
+            onHover={(id) => patchTab(scan.id, { hovered: id })}
+            onSelect={(id) => patchTab(scan.id, { selected: id })}
+            onContextMenu={(id, x, y) => setMenu({ x, y, id })}
+            onRemove={uncheck}
+            onCollect={collectChecked}
+            onTrash={() => doTrash(checkedRows.map((r) => r.id))}
+            onDeleteForever={() => doDeleteForever(checkedRows.map((r) => r.id))}
+            onClear={clearChecks}
+            onClose={() => patchTab(scan.id, { selectionOpen: false })}
+          />
+        )}
       </div>
 
       <div className="scanfoot">
-        <span>
+        <span className="foot-total">
           {formatBytes(focusTotal, base2)} here
           {rootTotal > 0 && focusTotal !== rootTotal && (
             <> · {formatBytes(rootTotal, base2)} in {scan.label}</>
           )}
         </span>
         {busy && <span className="foot-busy">working…</span>}
+        {checkedRows.length > 0 && (
+          <div className="foot-sel">
+            <button
+              className={'sel-chip' + (selectionOpen ? ' sel-chip-on' : '')}
+              onClick={() => patchTab(scan.id, { selectionOpen: !selectionOpen })}
+              aria-expanded={selectionOpen}
+              title={selectionOpen ? 'Hide the selected items' : 'Show the selected items again'}
+            >
+              <strong>{formatCount(checkedRows.length)}</strong> selected ·{' '}
+              {formatBytes(checkedBytes, base2)}
+            </button>
+            <button
+              className="icon-btn"
+              onClick={clearChecks}
+              aria-label="Clear the selection"
+              title="Clear the selection"
+            >
+              ×
+            </button>
+          </div>
+        )}
       </div>
 
       {menu && (

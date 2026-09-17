@@ -358,7 +358,8 @@ func (s *Scanner) excluded(path string) bool {
 		if ex == "" {
 			continue
 		}
-		if path == ex || strings.HasPrefix(path, strings.TrimSuffix(ex, "/")+"/") {
+		sep := string(filepath.Separator)
+		if path == ex || strings.HasPrefix(path, strings.TrimSuffix(ex, sep)+sep) {
 			return true
 		}
 	}

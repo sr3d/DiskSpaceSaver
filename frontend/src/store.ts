@@ -44,6 +44,12 @@ export interface TabState {
   checked: Set<number>;
   /** Anchor for shift-click range selection. */
   lastChecked: number;
+  /**
+   * Whether the selection pane is open. Set when the first box is ticked and
+   * cleared when the last one goes; the footer chip toggles it in between, so
+   * a pane closed by hand stays closed while the ticks remain.
+   */
+  selectionOpen: boolean;
 }
 
 export interface Confirm {
@@ -112,6 +118,7 @@ export const emptyTab = (): TabState => ({
   historyAt: 0,
   checked: new Set<number>(),
   lastChecked: 0,
+  selectionOpen: false,
 });
 
 let toastSeq = 1;
@@ -195,6 +202,7 @@ export const useStore = create<State>((set, get) => ({
             loading: true,
             checked: new Set<number>(),
             lastChecked: 0,
+            selectionOpen: false,
             history: trimmed,
             historyAt: trimmed.length - 1,
           },
@@ -223,7 +231,7 @@ export const useStore = create<State>((set, get) => ({
         [id]: {
           ...tab, focus: tab.history[at], historyAt: at,
           selected: 0, hovered: 0, loading: true,
-          checked: new Set<number>(), lastChecked: 0,
+          checked: new Set<number>(), lastChecked: 0, selectionOpen: false,
         },
       },
     }));
@@ -240,7 +248,7 @@ export const useStore = create<State>((set, get) => ({
         [id]: {
           ...tab, focus: tab.history[at], historyAt: at,
           selected: 0, hovered: 0, loading: true,
-          checked: new Set<number>(), lastChecked: 0,
+          checked: new Set<number>(), lastChecked: 0, selectionOpen: false,
         },
       },
     }));

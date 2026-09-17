@@ -183,6 +183,8 @@ export default function App() {
         if (st.confirm) st.askConfirm(null);
         else if (st.showPrefs) st.setShowPrefs(false);
         else if (st.hiddenSpaceMount) st.setHiddenSpaceMount(null);
+        else if (st.screen === 'scan' && st.activeScan && st.tabs[st.activeScan]?.selectionOpen)
+          st.patchTab(st.activeScan, { selectionOpen: false });
         else if (st.showCollector) st.setShowCollector(false);
         else api.closeQuickLook();
         return;

@@ -106,6 +106,19 @@ kbd {
   display: grid;
   place-items: center;
 }
+/* A small inline spinner for buttons that have started slow work. */
+.spinner {
+  display: inline-block;
+  width: 11px; height: 11px;
+  margin-right: 5px;
+  vertical-align: -1px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  opacity: 0.8;
+  animation: spin 0.7s linear infinite;
+}
+
 .boot-spin, .tab-spin {
   width: 18px; height: 18px; border-radius: 50%;
   border: 2px solid var(--line-strong); border-top-color: var(--accent);
@@ -270,7 +283,8 @@ kbd {
   background: transparent; color: var(--fg-dim);
   padding: 6px 9px; font-size: 11.5px; text-align: left;
 }
-.volume-cached:hover { color: var(--fg); border-color: var(--accent); }
+.volume-cached:hover:not(:disabled) { color: var(--fg); border-color: var(--accent); }
+.volume-cached:disabled { opacity: 0.75; }
 
 .volume-actions { display: flex; gap: 6px; margin-top: auto; }
 .volume-actions .btn { flex: 1; }
@@ -313,7 +327,7 @@ kbd {
 .crumb-sep { color: var(--fg-faint); }
 .crumb-home { font-weight: 500; }
 
-.scanbody { flex: 1; min-height: 0; display: flex; }
+.scanbody { flex: 1; min-height: 0; display: flex; position: relative; }
 
 .sunburst-wrap { flex: 1 1 auto; min-width: 240px; position: relative; display: flex; }
 .sunburst { display: block; width: 100%; height: 100%; }
@@ -558,14 +572,7 @@ kbd {
   accent-color: var(--accent);
   cursor: default;
 }
-.row-selected /* A narrow column drops the bar so the name keeps its room. */
-.sidecol-tight .row {
-  grid-template-columns: 15px 10px minmax(0, 1fr) 40px 64px;
-  grid-template-areas: 'check swatch name share size' '. . meta meta meta';
-}
-.sidecol-tight .row-bar { display: none; }
-
-.row-check { accent-color: #fff; }
+.row-selected .row-check { accent-color: #fff; }
 .row-swatch { grid-area: swatch; width: 10px; height: 10px; border-radius: 3px; }
 .row-name {
   grid-area: name; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -588,26 +595,58 @@ kbd {
 .sidebar-empty p { margin: 0 0 5px; color: var(--fg-dim); font-weight: 600; }
 .sidebar-empty span { font-size: 11.5px; }
 
-.bulkbar {
-  flex: none;
-  display: flex; align-items: center; gap: 7px;
-  padding: 7px 12px;
-  border-bottom: 1px solid var(--line);
-  background: var(--bg-sunken);
-}
-.bulkbar-count {
-  flex: 1; min-width: 0; font-size: 11.5px; color: var(--fg-dim);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.bulkbar-count strong { color: var(--fg); font-variant-numeric: tabular-nums; }
-.bulkbar .btn { height: 24px; padding: 0 9px; font-size: 11.5px; }
-
 .scanfoot {
   flex: none; display: flex; gap: 12px; align-items: center;
-  padding: 6px 14px; border-top: 1px solid var(--line);
+  height: 27px; padding: 0 14px; border-top: 1px solid var(--line);
   color: var(--fg-dim); font-size: 11.5px;
 }
-.foot-busy { margin-left: auto; color: var(--fg-faint); }
+.foot-total { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.foot-busy { color: var(--fg-faint); white-space: nowrap; }
+
+/* The selection summary. Sits at the trailing edge of the footer, which is the
+   only strip in the scan view whose height never changes. */
+.foot-sel {
+  margin-left: auto; flex: none;
+  display: flex; align-items: center; gap: 2px;
+}
+.sel-chip {
+  height: 19px; padding: 0 8px;
+  border: 1px solid var(--line-strong); border-radius: 9px;
+  background: var(--bg); color: var(--fg-dim);
+  font-size: 11px; white-space: nowrap;
+}
+.sel-chip:hover { background: var(--bg-sunken); color: var(--fg); }
+.sel-chip strong { color: var(--fg); font-variant-numeric: tabular-nums; }
+.sel-chip-on {
+  background: var(--accent); border-color: var(--accent); color: var(--accent-fg);
+}
+.sel-chip-on:hover { background: var(--accent); color: var(--accent-fg); }
+.sel-chip-on strong { color: var(--accent-fg); }
+.foot-sel .icon-btn { width: 19px; height: 19px; font-size: 13px; line-height: 1; }
+
+/* ----------------------------------------------------------- selection pane */
+
+/* Floats over the list instead of sitting above it or beside it: a column of
+   its own would squeeze the chart, and a bar above the list would move the
+   rows the user is in the middle of ticking. Borrows the collector's insides,
+   because it is the same idea — a basket of items with one way out. */
+.selpane {
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: min(340px, 82%);
+  z-index: 22;
+  background: var(--bg-raised);
+  border-left: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  display: flex; flex-direction: column;
+}
+.selpane-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selpane-title span { font-weight: 400; color: var(--fg-faint); }
+.selpane .collector-foot { flex-wrap: wrap; }
+.selpane .collector-foot .btn { flex: 1 1 42%; }
+.selected-item { cursor: default; }
+.selected-item:hover, .selected-item-hovered { background: var(--row-hover); }
+.selected-swatch { flex: none; }
 
 /* ---------------------------------------------------------------- collector */
 

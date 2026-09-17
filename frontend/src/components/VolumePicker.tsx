@@ -7,8 +7,11 @@ interface Props {
   volumes: Volume[];
   base2: boolean;
   helperAvailable: boolean;
-  onScan(path: string, asAdmin: boolean): void;
-  onOpenCached(path: string): void;
+  // These return promises so the card can stay busy until the work is done:
+  // opening a large saved scan takes seconds of decoding before any tab
+  // appears, and without feedback it reads as a dead button.
+  onScan(path: string, asAdmin: boolean): Promise<void> | void;
+  onOpenCached(path: string): Promise<void> | void;
   onChooseFolder(): void;
   onHiddenSpace(mount: string): void;
 }
@@ -16,6 +19,23 @@ interface Props {
 export function VolumePicker(props: Props) {
   const { volumes, base2, helperAvailable, onScan, onOpenCached, onChooseFolder, onHiddenSpace } = props;
   const [cached, setCached] = useState<Record<string, CachedScan | null>>({});
+  // Which card is working, and at what. Keyed by path so one busy volume does
+  // not disable the others.
+  const [busy, setBusy] = useState<Record<string, string>>({});
+
+  const run = async (path: string, what: string, fn: () => Promise<void> | void) => {
+    if (busy[path]) return; // a second click while the first is still running
+    setBusy((b) => ({ ...b, [path]: what }));
+    try {
+      await fn();
+    } finally {
+      setBusy((b) => {
+        const next = { ...b };
+        delete next[path];
+        return next;
+      });
+    }
+  };
 
   // Ask which volumes have a saved scan so each card can offer to reopen it.
   useEffect(() => {
@@ -88,19 +108,39 @@ export function VolumePicker(props: Props) {
               </div>
 
               {c && (
-                <button className="volume-cached" onClick={() => onOpenCached(v.path)}>
-                  Open last scan — {formatAge(c.ageMillis)}
+                <button
+                  className="volume-cached"
+                  disabled={!!busy[v.path]}
+                  onClick={() => run(v.path, 'opening', () => onOpenCached(v.path))}
+                >
+                  {busy[v.path] === 'opening' ? (
+                    <>
+                      <span className="spinner" aria-hidden /> Opening saved scan…
+                    </>
+                  ) : (
+                    <>Open last scan — {formatAge(c.ageMillis)}</>
+                  )}
                 </button>
               )}
 
               <div className="volume-actions">
-                <button className="btn btn-primary" onClick={() => onScan(v.path, false)} disabled={v.readOnly && v.network}>
-                  Scan
+                <button
+                  className="btn btn-primary"
+                  onClick={() => run(v.path, 'scanning', () => onScan(v.path, false))}
+                  disabled={!!busy[v.path] || (v.readOnly && v.network)}
+                >
+                  {busy[v.path] === 'scanning' ? (
+                    <>
+                      <span className="spinner" aria-hidden /> Starting…
+                    </>
+                  ) : (
+                    'Scan'
+                  )}
                 </button>
                 <button
                   className="btn"
-                  onClick={() => onScan(v.path, true)}
-                  disabled={!helperAvailable}
+                  onClick={() => run(v.path, 'scanning', () => onScan(v.path, true))}
+                  disabled={!helperAvailable || !!busy[v.path]}
                   title={
                     helperAvailable
                       ? 'Scan with the privileged helper to include other users’ files'

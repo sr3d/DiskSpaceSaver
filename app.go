@@ -43,6 +43,31 @@ type App struct {
 
 	previewMu sync.Mutex
 	previews  map[string]string
+
+	rootMu    sync.Mutex
+	rootLocks map[string]*sync.Mutex
+}
+
+// lockRoot serialises work for one scan root and returns the unlock.
+//
+// Decoding a large saved scan takes seconds, during which the session does not
+// exist yet — so a second click cannot be caught by looking for an open tab.
+// Without this, opening a cached scan twice in quick succession decoded the
+// tree twice and left two tabs for the same volume.
+func (a *App) lockRoot(root string) func() {
+	a.rootMu.Lock()
+	if a.rootLocks == nil {
+		a.rootLocks = map[string]*sync.Mutex{}
+	}
+	mu, ok := a.rootLocks[root]
+	if !ok {
+		mu = &sync.Mutex{}
+		a.rootLocks[root] = mu
+	}
+	a.rootMu.Unlock()
+
+	mu.Lock()
+	return mu.Unlock
 }
 
 // NewApp builds the application services.
@@ -332,6 +357,12 @@ func (a *App) LookupCachedScan(path string) CachedScan {
 // OpenCachedScan loads a saved scan into a new tab without walking the disk.
 func (a *App) OpenCachedScan(path string) (string, error) {
 	root := scanner.ResolveScanRoot(path)
+	defer a.lockRoot(root)()
+
+	// Already open: switch to that tab rather than loading a second copy.
+	if s, ok := a.scans.FindByRoot(root, false); ok {
+		return s.ID, nil
+	}
 	key := cacheKey(root, a.volumeUUIDFor(root))
 	t, savedAt, err := a.cache.Load(key)
 	if err != nil {
