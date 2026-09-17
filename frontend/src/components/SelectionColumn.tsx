@@ -15,10 +15,12 @@ const DEFAULT = 330;
 
 interface Props {
   uiScale: number;
+  /** Whether the selection is sharing the column with the inspector. */
+  split: boolean;
   children: ReactNode;
 }
 
-export function SelectionColumn({ uiScale, children }: Props) {
+export function SelectionColumn({ uiScale, split, children }: Props) {
   const stored = useStore((s) => s.prefs?.selectionWidth ?? DEFAULT);
   const setPrefs = useStore((s) => s.setPrefs);
 
@@ -31,7 +33,7 @@ export function SelectionColumn({ uiScale, children }: Props) {
 
   return (
     <ResizableColumn
-      className="selcol"
+      className={'selcol' + (split ? ' selcol-split' : '')}
       width={stored}
       min={MIN}
       max={MAX}

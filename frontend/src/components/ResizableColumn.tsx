@@ -21,17 +21,22 @@ interface Props {
   uiScale: number;
   /** Called once, when the drag ends or a key changes the width. */
   onCommit(width: number): void;
-  /** Base class for the column; `<className>-tight` is added below tightBelow. */
+  /** Class (or classes) for the column element. */
   className: string;
   /** Width under which the column is too narrow for its full layout. */
   tightBelow?: number;
+  /** Added while the column is below tightBelow. */
+  tightClass?: string;
   /** What the handle resizes, for screen readers: "the list", "the selection". */
   label: string;
   children: ReactNode;
 }
 
 export function ResizableColumn(props: Props) {
-  const { width: stored, min, max, fallback, uiScale, onCommit, className, tightBelow, label, children } = props;
+  const {
+    width: stored, min, max, fallback, uiScale, onCommit,
+    className, tightBelow, tightClass, label, children,
+  } = props;
   const [width, setWidth] = useState(stored);
   const [dragging, setDragging] = useState(false);
   const startRef = useRef({ x: 0, w: 0 });
@@ -94,10 +99,10 @@ export function ResizableColumn(props: Props) {
     onCommit(next);
   };
 
-  const tight = tightBelow !== undefined && width < tightBelow;
+  const tight = tightBelow !== undefined && tightClass && width < tightBelow;
 
   return (
-    <div className={className + (tight ? ` ${className}-tight` : '')} style={{ width }}>
+    <div className={className + (tight ? ' ' + tightClass : '')} style={{ width }}>
       <div
         className={'resizer' + (dragging ? ' resizer-active' : '')}
         onMouseDown={begin}

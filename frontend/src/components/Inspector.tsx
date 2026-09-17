@@ -18,10 +18,11 @@ interface Props {
   flags: number;
   onQuickLook(): void;
   onReveal(): void;
+  onCopyPath(): void;
 }
 
 export function Inspector(props: Props) {
-  const { scanID, nodeID, base2, files, inline, flags, onQuickLook, onReveal } = props;
+  const { scanID, nodeID, base2, files, inline, flags, onQuickLook, onReveal, onCopyPath } = props;
   const caps = useStore((s) => s.caps);
   const [data, setData] = useState<PreviewData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -63,19 +64,19 @@ export function Inspector(props: Props) {
   const isDir = data.kind === KIND_DIR || data.kind === KIND_PACKAGE;
   return (
     <aside className={'inspector' + (inline ? ' inspector-inline' : '')} aria-label="Item details">
-      {data.image ? (
+      {/* Only a real preview earns the space. What used to sit here when
+          there was none was a square the size of the panel's top third
+          containing the word FOLDER — which the Kind row below already says,
+          in a place the eye can scan. */}
+      {data.image && (
         <button
-          className="inspector-image"
+          className={'inspector-image' + (loading ? ' inspector-loading' : '')}
           onClick={onQuickLook}
           title={caps.preview ? `Open in Quick Look (Space)` : `Open (Space)`}
           aria-label={`Preview of ${data.name}. ${caps.preview ? "Open in Quick Look." : "Open."}`}
         >
           <img src={data.image} alt="" />
         </button>
-      ) : (
-        <div className={'inspector-blank' + (loading ? ' inspector-loading' : '')}>
-          <span>{isDir ? 'folder' : data.ext || 'file'}</span>
-        </div>
       )}
 
       <div className="inspector-body">
@@ -115,9 +116,34 @@ export function Inspector(props: Props) {
           <p className="inspector-note">A hardlink. Its bytes are counted once, at the first copy found.</p>
         )}
 
-        <button className="inspector-path" onClick={onReveal} title="Show in Finder">
-          {data.path}
-        </button>
+        {/* Where the thing is, which is most of what someone opens this
+            panel to find out, so it is legible rather than a grey footnote.
+            Clicking it still reveals in the file manager; the button beside it
+            copies, which is the other thing a path is for. */}
+        <div className="inspector-where">
+          <button
+            className="inspector-path"
+            onClick={onReveal}
+            title={`${caps.revealLabel}`}
+          >
+            {data.path}
+          </button>
+          <button
+            className="icon-btn inspector-copy"
+            onClick={onCopyPath}
+            title={`Copy path (${caps.modKey}\u21e7C)`}
+            aria-label="Copy the path"
+          >
+            {/* Drawn rather than set in type: the glyphs for this idea render
+                differently or not at all depending on the font stack. */}
+            <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden focusable="false">
+              <rect x="5.2" y="5.2" width="8.4" height="8.4" rx="2"
+                fill="none" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M10.8 5.2V4.4a2 2 0 0 0-2-2H4.4a2 2 0 0 0-2 2v4.4a2 2 0 0 0 2 2h0.8"
+                fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
       </div>
     </aside>
   );

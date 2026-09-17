@@ -519,10 +519,18 @@ kbd {
   flex-direction: column;
 }
 
+/* Taken out of flow rather than sitting in it. In flow, a 9px handle pulled
+   back 5px still occupies 4px of the column, so every resizable column had a
+   4px gutter down its left edge that nothing was drawing — content did not
+   meet the border, and beside the column's own border it read as two lines.
+   Absolute against the column, which is why all three are position: relative.
+   The handle still straddles the border, so it is no harder to grab. */
 .resizer {
-  flex: none;
+  position: absolute;
+  left: -5px;
+  top: 0;
+  bottom: 0;
   width: 9px;
-  margin-left: -5px;          /* straddles the border so it is easy to grab */
   cursor: col-resize;
   background: transparent;
   border: none;
@@ -645,22 +653,16 @@ kbd {
   overflow: visible;
 }
 
-.inspector-image, .inspector-blank {
+.inspector-image {
   flex: none;
   width: 100%; aspect-ratio: 1;
   border-radius: 9px; border: 1px solid var(--line);
   background: var(--bg-sunken);
   display: grid; place-items: center; overflow: hidden; padding: 0;
+  cursor: zoom-in;
 }
-.inspector-inline .inspector-image, .inspector-inline .inspector-blank {
-  width: 76px; height: 76px; aspect-ratio: auto;
-}
-.inspector-image { cursor: zoom-in; }
+.inspector-inline .inspector-image { width: 76px; height: 76px; aspect-ratio: auto; }
 .inspector-image img { max-width: 100%; max-height: 100%; display: block; object-fit: contain; }
-.inspector-blank span {
-  color: var(--fg-faint); font-size: 11px;
-  text-transform: uppercase; letter-spacing: 0.07em;
-}
 .inspector-loading { opacity: 0.5; }
 
 .inspector-body { min-width: 0; }
@@ -688,16 +690,40 @@ kbd {
 }
 .inspector-inline .inspector-note { display: none; }
 
+/* Where the item is. It used to be a 10.5px grey line at the bottom of the
+   panel, below the notes — which is roughly last place for something that is
+   often the reason the panel was opened at all. */
+.inspector-where {
+  display: flex; align-items: flex-start; gap: 4px;
+  margin-top: 12px; padding: 7px 5px 7px 9px;
+  background: var(--bg-sunken);
+  border-radius: 7px;
+}
 .inspector-path {
-  margin-top: 10px; padding: 0;
-  border: none; background: none; text-align: left;
-  color: var(--fg-faint); font-size: 10.5px; line-height: 1.4;
+  flex: 1 1 auto; min-width: 0;
+  padding: 0; border: none; background: none; text-align: left;
+  color: var(--fg-dim); font-size: 11.5px; line-height: 1.45;
   overflow-wrap: anywhere; cursor: default;
 }
 .inspector-path:hover { color: var(--accent); text-decoration: underline; }
-.inspector-inline .inspector-path {
-  margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.inspector-copy {
+  flex: none;
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  color: var(--fg-faint);
 }
+.inspector-copy:hover { color: var(--fg); background: var(--line); }
+
+/* Inline, the card is a single row and the path is the one line under the
+   name, so it keeps the quieter treatment and the copy button would crowd it. */
+.inspector-inline .inspector-where {
+  margin-top: 2px; padding: 0; background: none; border-radius: 0;
+}
+.inspector-inline .inspector-path {
+  font-size: 10.5px; color: var(--fg-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.inspector-inline .inspector-copy { display: none; }
 
 .navbtns { display: flex; gap: 1px; flex: none; }
 .navbtns .icon-btn { width: 22px; font-size: 17px; line-height: 1; }
@@ -813,7 +839,16 @@ kbd {
 /* Stacked under the inspector rather than beside it, so the divider between
    them reads as one column split in two and not as a third column. */
 .selcol .inspector + .selpane { border-top: 1px solid var(--line); }
-.selcol .inspector { flex: 0 0 auto; max-height: 45%; overflow-y: auto; }
+/* The column already draws the edge, so the inspector must not draw a second
+   one a few pixels further in. */
+.selcol .inspector { border-left: none; overflow-y: auto; }
+/* Alone in the column it takes all of it: capping it at 45% left the details
+   squeezed into the top with an empty column below them and nothing to fill
+   it. It only gives way when the selection is sharing the column. */
+.selcol .inspector { flex: 1 1 auto; max-height: none; }
+.selcol .inspector-empty { flex: 1 1 auto; }
+.selcol-split .inspector { flex: 0 0 auto; max-height: 45%; }
+.selcol-split .inspector-empty { flex: 0 0 190px; }
 .selpane-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .selpane-title span { font-weight: 400; color: var(--fg-faint); }
 /* The two destructive buttons belong on their own row, away from Clear and

@@ -491,6 +491,13 @@ export function ScanView({ scan, palette, dark }: Props) {
       inline={inspectorInline}
       onQuickLook={() => selected && act(() => api.quickLook([ref(selected)], 0), 'Could not preview')}
       onReveal={() => selected && act(() => api.reveal([ref(selected)]), `Could not ${caps.revealLabel.toLowerCase()}`)}
+      onCopyPath={() =>
+        selected &&
+        act(async () => {
+          const p = await api.copyPath(ref(selected));
+          toast('info', 'Path copied', middleTruncate(p, 64));
+        }, 'Could not copy the path')
+      }
     />
   );
 
@@ -627,7 +634,7 @@ export function ScanView({ scan, palette, dark }: Props) {
             Three columns and not four — the chart is what the app is for, and
             a fourth would come out of its width. */}
         {(selectionOpen || !inspectorInline) && (
-          <SelectionColumn uiScale={uiScale}>
+          <SelectionColumn uiScale={uiScale} split={selectionOpen && !inspectorInline}>
             {!inspectorInline && inspector}
             {selectionOpen && (
               <SelectionPane

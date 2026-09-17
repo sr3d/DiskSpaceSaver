@@ -40,6 +40,7 @@ export function SidebarColumn({ uiScale, children }: Props) {
       // carry the proportion. Driven from the measured width rather than a
       // container query, which the WebView on early macOS 13 does not support.
       tightBelow={430}
+      tightClass="sidecol-tight"
       label="the list"
     >
       {children}
