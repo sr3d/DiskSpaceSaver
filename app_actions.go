@@ -9,7 +9,7 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"github.com/sr3d/diskspacesaver/internal/collector"
+	"github.com/sr3d/diskspacesaver/internal/monitor"
 	"github.com/sr3d/diskspacesaver/internal/platform"
 	"github.com/sr3d/diskspacesaver/internal/scanner"
 	"github.com/sr3d/diskspacesaver/internal/scanstore"
@@ -199,7 +199,7 @@ func (a *App) DescribeItems(refs []ItemRef) ([]SelectedItem, error) {
 		out = append(out, it)
 	}
 
-	// The same rule the collector uses, so the two agree about what a
+	// The same rule the monitor uses, so the two agree about what a
 	// selection is worth: a child whose parent is also selected contributes
 	// nothing of its own.
 	for i := range out {
@@ -220,7 +220,7 @@ func (a *App) DescribeItems(refs []ItemRef) ([]SelectedItem, error) {
 }
 
 // pathContains reports whether child sits strictly inside parent. It is
-// collector.isAncestor's rule, which exists so that "/v/about.txt" is not
+// monitor.isAncestor's rule, which exists so that "/v/about.txt" is not
 // mistaken for a child of "/v/a" — a prefix test alone would drop the sibling.
 func pathContains(parent, child string) bool {
 	if parent == "" || parent == child || len(child) <= len(parent) {
@@ -348,7 +348,7 @@ func (a *App) deleteItems(refs []ItemRef, toTrash bool) (Result, error) {
 		res.Succeeded = append(res.Succeeded, path)
 		res.Bytes += n.Alloc
 		s.Tree.Prune(ref.NodeID)
-		a.tray.Remove(ref.ScanID, ref.NodeID)
+		a.mon.Remove(ref.ScanID, ref.NodeID)
 		touched[ref.ScanID] = true
 	}
 
@@ -359,7 +359,7 @@ func (a *App) deleteItems(refs []ItemRef, toTrash bool) (Result, error) {
 		}
 	}
 	if len(res.Succeeded) > 0 {
-		a.emit("collector:changed", a.tray.List())
+		a.emit("monitor:changed", a.mon.List())
 	}
 	if len(res.Failed) > 0 && len(res.Succeeded) == 0 {
 		return res, firstFailure(res, "nothing could be deleted")
@@ -468,61 +468,119 @@ func (a *App) rescanAll(s *scanstore.Session) (string, error) {
 	return a.StartScan(root, admin)
 }
 
-// ---------------------------------------------------------------- collector
+// ---------------------------------------------------------------- monitor
 
-// CollectorAdd drops items into the tray.
-func (a *App) CollectorAdd(refs []ItemRef) (collector.State, error) {
-	var items []collector.Item
+// MonitorAdd starts watching items.
+func (a *App) MonitorAdd(refs []ItemRef) (monitor.State, error) {
+	var items []monitor.Item
 	for _, ref := range refs {
 		s, path, err := a.resolve(ref)
 		if err != nil {
 			continue
 		}
 		n, _ := s.Tree.Snapshot(ref.NodeID)
-		items = append(items, collector.Item{
+		items = append(items, monitor.Item{
 			ScanID: ref.ScanID, NodeID: ref.NodeID, Path: path, Name: n.Name,
 			Size: n.Alloc, Kind: n.Kind, ScanRoot: s.Root, AsAdmin: s.AsAdmin,
 		})
 	}
 	if len(items) == 0 {
-		return a.tray.List(), errors.New("those items could not be collected")
+		return a.mon.List(), errors.New("those items could not be watched")
 	}
-	st := a.tray.Add(items...)
-	a.emit("collector:changed", st)
+	st := a.mon.Add(items...)
+	a.emit("monitor:changed", st)
 	return st, nil
 }
 
-// CollectorRemove takes one item back out of the tray.
-func (a *App) CollectorRemove(scanID string, nodeID uint32) collector.State {
-	st := a.tray.Remove(scanID, nodeID)
-	a.emit("collector:changed", st)
+// MonitorRemove stops watching one item.
+func (a *App) MonitorRemove(scanID string, nodeID uint32) monitor.State {
+	st := a.mon.Remove(scanID, nodeID)
+	a.emit("monitor:changed", st)
 	return st
 }
 
-// CollectorList returns the tray's contents and total.
-func (a *App) CollectorList() collector.State { return a.tray.List() }
+// MonitorList returns the watchlist and its totals.
+func (a *App) MonitorList() monitor.State { return a.mon.List() }
 
-// CollectorClear empties the tray without deleting anything.
-func (a *App) CollectorClear() collector.State {
-	st := a.tray.Clear()
-	a.emit("collector:changed", st)
+// MonitorClear stops watching everything, without deleting anything.
+func (a *App) MonitorClear() monitor.State {
+	st := a.mon.Clear()
+	a.emit("monitor:changed", st)
 	return st
 }
 
-// CollectorHas reports whether an item is already in the tray.
-func (a *App) CollectorHas(scanID string, nodeID uint32) bool {
-	return a.tray.Has(scanID, nodeID)
+// MonitorHas reports whether an item is already watched.
+func (a *App) MonitorHas(scanID string, nodeID uint32) bool {
+	return a.mon.Has(scanID, nodeID)
 }
 
-// CollectorDeleteAll empties the tray by deleting everything in it.
-func (a *App) CollectorDeleteAll(permanent bool) (Result, error) {
-	st := a.tray.List()
+// MonitorRefresh re-measures every watched item against the disk.
+//
+// It walks each path itself rather than going through the scan that produced
+// it. A watched folder is meant to outlive the tab it came from — that is what
+// separates watching something from ticking it — so the measurement cannot
+// depend on a tree that may have been closed, or on a snapshot taken before
+// the thing the user is watching for happened.
+//
+// One at a time, deliberately: several concurrent walks over the same disk
+// finish no sooner and make the per-item progress meaningless.
+func (a *App) MonitorRefresh() (monitor.State, error) {
+	p := a.prefs.Get()
+	st := a.mon.List()
+	for i, it := range st.Items {
+		a.emit("monitor:measuring", map[string]any{
+			"path": it.Path, "index": i, "count": len(st.Items),
+		})
+
+		fi, err := os.Lstat(it.Path)
+		if err != nil {
+			st = a.mon.Update(it.ScanID, it.NodeID, 0, true)
+			continue
+		}
+		if !fi.IsDir() {
+			// A plain file needs no walk, and its allocated size is what the
+			// scanner would have recorded for it.
+			st = a.mon.Update(it.ScanID, it.NodeID, scanner.AllocatedSize(it.Path, fi), false)
+			continue
+		}
+
+		sub := scanner.New(scanner.Options{Root: it.Path, Exclusions: p.Exclusions, UseBulk: p.UseBulkScan})
+		t := tree.New(it.Path)
+		drained := make(chan struct{})
+		go func() {
+			defer close(drained)
+			for range sub.Progress() {
+			}
+		}()
+		go sub.Run(a.ctx)
+		for f := range sub.Frames() {
+			t.Apply(f)
+		}
+		<-drained
+		if err := sub.Err(); err != nil {
+			// A tree we could not finish measuring keeps its old figure rather
+			// than reporting a partial walk as shrinkage.
+			continue
+		}
+		t.Finalize()
+		if root, ok := t.Snapshot(t.Root); ok {
+			st = a.mon.Update(it.ScanID, it.NodeID, root.Alloc, false)
+		}
+	}
+	a.emit("monitor:measuring", map[string]any{"done": true})
+	a.emit("monitor:changed", st)
+	return st, nil
+}
+
+// MonitorDeleteAll deletes everything on the watchlist.
+func (a *App) MonitorDeleteAll(permanent bool) (Result, error) {
+	st := a.mon.List()
 	refs := make([]ItemRef, 0, len(st.Items))
 	for _, it := range st.Items {
 		refs = append(refs, ItemRef{ScanID: it.ScanID, NodeID: it.NodeID})
 	}
 	if len(refs) == 0 {
-		return newResult(), errors.New("the collector is empty")
+		return newResult(), errors.New("nothing is being watched")
 	}
 	if permanent {
 		return a.DeletePermanently(refs)

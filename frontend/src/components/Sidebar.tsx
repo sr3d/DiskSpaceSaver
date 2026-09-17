@@ -15,7 +15,7 @@ interface Props {
   base2: boolean;
   hovered: number;
   selected: number;
-  collected: Set<number>;
+  watched: Set<number>;
   loading: boolean;
   onHover(id: number): void;
   onSelect(id: number): void;
@@ -25,7 +25,7 @@ interface Props {
 
 export function Sidebar(props: Props) {
   const {
-    rows, total, palette, dark, base2, hovered, selected, collected, loading,
+    rows, total, palette, dark, base2, hovered, selected, watched, loading,
     checked, onToggleCheck, onHover, onSelect, onOpen, onContextMenu,
   } = props;
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -95,7 +95,7 @@ export function Sidebar(props: Props) {
             <span className="row-swatch" style={{ background: style.fill }} aria-hidden />
             <span className="row-name">
               {r.name}
-              {collected.has(r.id) && <span className="row-badge" title="In the collector">●</span>}
+              {watched.has(r.id) && <span className="row-badge" title="Watched in the Monitor">●</span>}
               {(r.flags & FLAG_NOPERM) !== 0 && (
                 <span className="row-warn" title="Could not be read">!</span>
               )}

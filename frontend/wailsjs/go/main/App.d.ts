@@ -4,9 +4,9 @@ import {prefs} from '../models';
 import {updater} from '../models';
 import {platform} from '../models';
 import {main} from '../models';
-import {collector} from '../models';
 import {tree} from '../models';
 import {scanstore} from '../models';
+import {monitor} from '../models';
 
 export function AddExclusion(arg1:string):Promise<prefs.Prefs>;
 
@@ -23,18 +23,6 @@ export function ClearScanCache():Promise<void>;
 export function CloseQuickLook():Promise<void>;
 
 export function CloseScan(arg1:string):Promise<void>;
-
-export function CollectorAdd(arg1:Array<main.ItemRef>):Promise<collector.State>;
-
-export function CollectorClear():Promise<collector.State>;
-
-export function CollectorDeleteAll(arg1:boolean):Promise<main.Result>;
-
-export function CollectorHas(arg1:string,arg2:number):Promise<boolean>;
-
-export function CollectorList():Promise<collector.State>;
-
-export function CollectorRemove(arg1:string,arg2:number):Promise<collector.State>;
 
 export function CopyPath(arg1:main.ItemRef):Promise<string>;
 
@@ -90,6 +78,20 @@ export function ListVolumes():Promise<Array<platform.Volume>>;
 
 export function LookupCachedScan(arg1:string):Promise<main.CachedScan>;
 
+export function MonitorAdd(arg1:Array<main.ItemRef>):Promise<monitor.State>;
+
+export function MonitorClear():Promise<monitor.State>;
+
+export function MonitorDeleteAll(arg1:boolean):Promise<main.Result>;
+
+export function MonitorHas(arg1:string,arg2:number):Promise<boolean>;
+
+export function MonitorList():Promise<monitor.State>;
+
+export function MonitorRefresh():Promise<monitor.State>;
+
+export function MonitorRemove(arg1:string,arg2:number):Promise<monitor.State>;
+
 export function MoveToTrash(arg1:Array<main.ItemRef>):Promise<main.Result>;
 
 export function OpenCachedScan(arg1:string):Promise<string>;
@@ -114,9 +116,9 @@ export function RevealInFinder(arg1:Array<main.ItemRef>):Promise<void>;
 
 export function ScanCacheBytes():Promise<number>;
 
-export function SetCollectorWidth(arg1:number):Promise<prefs.Prefs>;
-
 export function SetMinItemSize(arg1:number):Promise<prefs.Prefs>;
+
+export function SetMonitorWidth(arg1:number):Promise<prefs.Prefs>;
 
 export function SetPrefs(arg1:prefs.Prefs):Promise<prefs.Prefs>;
 

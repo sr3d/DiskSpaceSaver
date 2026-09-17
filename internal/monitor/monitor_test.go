@@ -1,4 +1,4 @@
-package collector
+package monitor
 
 import "testing"
 
@@ -7,7 +7,7 @@ func TestAddDeduplicatesAndSubsumes(t *testing.T) {
 	c.Add(Item{ScanID: "s", NodeID: 1, Path: "/v/a/b.bin", Name: "b.bin", Size: 100})
 	c.Add(Item{ScanID: "s", NodeID: 1, Path: "/v/a/b.bin", Name: "b.bin", Size: 100})
 	if st := c.List(); st.Count != 1 || st.Total != 100 {
-		t.Fatalf("duplicate add changed the tray: %+v", st)
+		t.Fatalf("duplicate add changed the watchlist: %+v", st)
 	}
 
 	// Adding the parent must absorb the child rather than double-count it.
@@ -16,10 +16,10 @@ func TestAddDeduplicatesAndSubsumes(t *testing.T) {
 		t.Fatalf("parent did not subsume child: %+v", st)
 	}
 
-	// Adding the child back under a collected parent is a no-op.
+	// Adding the child back under a watched parent is a no-op.
 	st = c.Add(Item{ScanID: "s", NodeID: 3, Path: "/v/a/c.bin", Size: 40})
 	if st.Count != 1 || st.Total != 500 {
-		t.Fatalf("child added under a collected parent: %+v", st)
+		t.Fatalf("child added under a watched parent: %+v", st)
 	}
 
 	// A sibling with a shared name prefix is not a descendant.

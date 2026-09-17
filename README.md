@@ -23,7 +23,7 @@ helper), Go 1.25+, Node 20+ and Wails v2.13.
 ```
 React / TypeScript (WKWebView)
   VolumePicker · ScanTabs · Sunburst (canvas) · Sidebar · Breadcrumbs
-  Collector · HiddenSpace · Preferences
+  Monitor · HiddenSpace · Preferences
         │  Wails bindings and events
 Go
   internal/scanner     parallel walk, frame output, hardlink dedupe
@@ -77,9 +77,9 @@ GB macOS reports as purgeable lands within **0.73%** of Finder's used figure.
 | `Space` | Quick Look |
 | `⌘I` · `⌘⇧R` · `⌘O` | Get Info · Show in Finder · Open |
 | `⌘A` | tick every row in this folder |
-| `⌘D` | add to the collector |
+| `⌘D` | watch in the monitor |
 | `⌘⌫` / `⌘⌥⌫` | Trash · delete permanently |
-| `⌘T` · `⌘R` · `⌘L` · `⌘,` | new scan · rescan the current folder · collector · preferences |
+| `⌘T` · `⌘R` · `⌘L` · `⌘,` | new scan · rescan the current folder · monitor · preferences |
 
 The interface scale runs from 75% to 200% and is remembered between launches;
 it is also in Preferences under Appearance. It scales layout rather than

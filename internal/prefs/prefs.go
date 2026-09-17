@@ -78,8 +78,8 @@ type Prefs struct {
 	// reasons — the list for long names, this one for how many ticks they want
 	// to see at once.
 	SelectionWidth int `json:"selectionWidth"`
-	// CollectorWidth is the width of the collector tray, in points.
-	CollectorWidth int `json:"collectorWidth"`
+	// MonitorWidth is the width of the monitor panel, in points.
+	MonitorWidth int `json:"monitorWidth"`
 }
 
 // Sidebar width limits, in points.
@@ -156,7 +156,7 @@ func Defaults() Prefs {
 		MinItemSize:          DefaultMinItemSize,
 		SidebarWidth:         350,
 		SelectionWidth:       330,
-		CollectorWidth:       330,
+		MonitorWidth:         330,
 	}
 }
 
@@ -280,14 +280,14 @@ func (p Prefs) normalized() Prefs {
 	if p.SelectionWidth > MaxSidebarWidth {
 		p.SelectionWidth = MaxSidebarWidth
 	}
-	if p.CollectorWidth == 0 {
-		p.CollectorWidth = 330
+	if p.MonitorWidth == 0 {
+		p.MonitorWidth = 330
 	}
-	if p.CollectorWidth < MinSidebarWidth {
-		p.CollectorWidth = MinSidebarWidth
+	if p.MonitorWidth < MinSidebarWidth {
+		p.MonitorWidth = MinSidebarWidth
 	}
-	if p.CollectorWidth > MaxSidebarWidth {
-		p.CollectorWidth = MaxSidebarWidth
+	if p.MonitorWidth > MaxSidebarWidth {
+		p.MonitorWidth = MaxSidebarWidth
 	}
 	return p
 }

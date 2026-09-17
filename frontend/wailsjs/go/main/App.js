@@ -34,30 +34,6 @@ export function CloseScan(arg1) {
   return window['go']['main']['App']['CloseScan'](arg1);
 }
 
-export function CollectorAdd(arg1) {
-  return window['go']['main']['App']['CollectorAdd'](arg1);
-}
-
-export function CollectorClear() {
-  return window['go']['main']['App']['CollectorClear']();
-}
-
-export function CollectorDeleteAll(arg1) {
-  return window['go']['main']['App']['CollectorDeleteAll'](arg1);
-}
-
-export function CollectorHas(arg1, arg2) {
-  return window['go']['main']['App']['CollectorHas'](arg1, arg2);
-}
-
-export function CollectorList() {
-  return window['go']['main']['App']['CollectorList']();
-}
-
-export function CollectorRemove(arg1, arg2) {
-  return window['go']['main']['App']['CollectorRemove'](arg1, arg2);
-}
-
 export function CopyPath(arg1) {
   return window['go']['main']['App']['CopyPath'](arg1);
 }
@@ -166,6 +142,34 @@ export function LookupCachedScan(arg1) {
   return window['go']['main']['App']['LookupCachedScan'](arg1);
 }
 
+export function MonitorAdd(arg1) {
+  return window['go']['main']['App']['MonitorAdd'](arg1);
+}
+
+export function MonitorClear() {
+  return window['go']['main']['App']['MonitorClear']();
+}
+
+export function MonitorDeleteAll(arg1) {
+  return window['go']['main']['App']['MonitorDeleteAll'](arg1);
+}
+
+export function MonitorHas(arg1, arg2) {
+  return window['go']['main']['App']['MonitorHas'](arg1, arg2);
+}
+
+export function MonitorList() {
+  return window['go']['main']['App']['MonitorList']();
+}
+
+export function MonitorRefresh() {
+  return window['go']['main']['App']['MonitorRefresh']();
+}
+
+export function MonitorRemove(arg1, arg2) {
+  return window['go']['main']['App']['MonitorRemove'](arg1, arg2);
+}
+
 export function MoveToTrash(arg1) {
   return window['go']['main']['App']['MoveToTrash'](arg1);
 }
@@ -214,12 +218,12 @@ export function ScanCacheBytes() {
   return window['go']['main']['App']['ScanCacheBytes']();
 }
 
-export function SetCollectorWidth(arg1) {
-  return window['go']['main']['App']['SetCollectorWidth'](arg1);
-}
-
 export function SetMinItemSize(arg1) {
   return window['go']['main']['App']['SetMinItemSize'](arg1);
+}
+
+export function SetMonitorWidth(arg1) {
+  return window['go']['main']['App']['SetMonitorWidth'](arg1);
 }
 
 export function SetPrefs(arg1) {

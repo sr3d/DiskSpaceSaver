@@ -16,9 +16,9 @@ interface TabsProps {
 }
 
 export function TitleBar({ scans, activeID, base2, onSelect, onClose, onNew }: TabsProps) {
-  const collector = useStore((s) => s.collector);
-  const setShowCollector = useStore((s) => s.setShowCollector);
-  const showCollector = useStore((s) => s.showCollector);
+  const monitor = useStore((s) => s.monitor);
+  const setShowMonitor = useStore((s) => s.setShowMonitor);
+  const showMonitor = useStore((s) => s.showMonitor);
   const setShowPrefs = useStore((s) => s.setShowPrefs);
   const setScreen = useStore((s) => s.setScreen);
   const mod = useStore((s) => s.caps.modKey);
@@ -77,14 +77,14 @@ export function TitleBar({ scans, activeID, base2, onSelect, onClose, onNew }: T
 
       <div className="titlebar-right">
         <button
-          className={'chip' + (collector.count ? ' chip-active' : '') + (showCollector ? ' chip-open' : '')}
-          onClick={() => setShowCollector(!showCollector)}
-          title={`Collector (${mod}L)`}
+          className={'chip' + (monitor.count ? ' chip-active' : '') + (showMonitor ? ' chip-open' : '')}
+          onClick={() => setShowMonitor(!showMonitor)}
+          title={`Monitor — watch folders and see how they change (${mod}L)`}
         >
-          Collector{collector.count > 0 && <em>{formatBytes(collector.total, base2)}</em>}
+          Monitor{monitor.count > 0 && <em>{formatBytes(monitor.total, base2)}</em>}
         </button>
         {/* The gear alone was a guess: nothing in the bar said what it opened.
-            Labelled like the Collector beside it, so both read as the same
+            Labelled like the Monitor beside it, so both read as the same
             kind of control. */}
         <button className="chip" onClick={() => setShowPrefs(true)} title={`Settings (${mod},)`}>
           <span aria-hidden>⚙</span>

@@ -45,7 +45,7 @@ func (a *App) buildMenu() *menu.Menu {
 	item.AddText("Get Info", keys.CmdOrCtrl("i"), cmd("getInfo"))
 	item.AddText("Open", keys.CmdOrCtrl("o"), cmd("open"))
 	item.AddSeparator()
-	item.AddText("Add to Collector", keys.CmdOrCtrl("d"), cmd("collect"))
+	item.AddText("Watch in Monitor", keys.CmdOrCtrl("d"), cmd("watch"))
 	item.AddText("Move to Trash", keys.CmdOrCtrl("backspace"), cmd("trash"))
 	item.AddText("Delete Permanently…", keys.Combo("backspace", keys.CmdOrCtrlKey, keys.OptionOrAltKey), cmd("deleteForever"))
 
@@ -69,7 +69,7 @@ func (a *App) buildMenu() *menu.Menu {
 	view.AddText("Smaller", keys.CmdOrCtrl("-"), cmd("uiSmaller"))
 	view.AddText("Actual Size", keys.CmdOrCtrl("0"), cmd("uiReset"))
 	view.AddSeparator()
-	view.AddText("Show Collector", keys.CmdOrCtrl("l"), cmd("toggleCollector"))
+	view.AddText("Show Monitor", keys.CmdOrCtrl("l"), cmd("toggleMonitor"))
 	// Cmd-H is the system Hide item installed by AppMenu.
 	view.AddText("Hidden Space…", keys.Combo("h", keys.CmdOrCtrlKey, keys.ShiftKey), cmd("hiddenSpace"))
 	view.AddSeparator()

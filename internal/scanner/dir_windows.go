@@ -278,3 +278,11 @@ func (s *Scanner) makeEntry(job dirJob, name string, d *windows.Win32finddata, c
 	}
 	return e
 }
+
+// AllocatedSize is what one already-stat'd file occupies on disk, in the same
+// terms the walk records. It is exported for the monitor, which re-measures a
+// watched path directly rather than through a scan, and must not report a
+// different number for the same file than the chart does.
+func AllocatedSize(path string, fi os.FileInfo) int64 {
+	return allocatedSize(path, fi.Size())
+}

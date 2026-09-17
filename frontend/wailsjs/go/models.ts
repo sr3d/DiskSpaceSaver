@@ -1,68 +1,3 @@
-export namespace collector {
-	
-	export class Item {
-	    scanID: string;
-	    nodeID: number;
-	    path: string;
-	    name: string;
-	    size: number;
-	    kind: number;
-	    scanRoot: string;
-	    asAdmin: boolean;
-	
-	    static createFrom(source: any = {}) {
-	        return new Item(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.scanID = source["scanID"];
-	        this.nodeID = source["nodeID"];
-	        this.path = source["path"];
-	        this.name = source["name"];
-	        this.size = source["size"];
-	        this.kind = source["kind"];
-	        this.scanRoot = source["scanRoot"];
-	        this.asAdmin = source["asAdmin"];
-	    }
-	}
-	export class State {
-	    items: Item[];
-	    total: number;
-	    count: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new State(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.items = this.convertValues(source["items"], Item);
-	        this.total = source["total"];
-	        this.count = source["count"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-
-}
-
 export namespace main {
 	
 	export class AppInfo {
@@ -346,6 +281,81 @@ export namespace main {
 
 }
 
+export namespace monitor {
+	
+	export class Item {
+	    scanID: string;
+	    nodeID: number;
+	    path: string;
+	    name: string;
+	    size: number;
+	    kind: number;
+	    scanRoot: string;
+	    asAdmin: boolean;
+	    base: number;
+	    addedAt: number;
+	    gone: boolean;
+	    measuredAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Item(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.scanID = source["scanID"];
+	        this.nodeID = source["nodeID"];
+	        this.path = source["path"];
+	        this.name = source["name"];
+	        this.size = source["size"];
+	        this.kind = source["kind"];
+	        this.scanRoot = source["scanRoot"];
+	        this.asAdmin = source["asAdmin"];
+	        this.base = source["base"];
+	        this.addedAt = source["addedAt"];
+	        this.gone = source["gone"];
+	        this.measuredAt = source["measuredAt"];
+	    }
+	}
+	export class State {
+	    items: Item[];
+	    total: number;
+	    count: number;
+	    baseTotal: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new State(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], Item);
+	        this.total = source["total"];
+	        this.count = source["count"];
+	        this.baseTotal = source["baseTotal"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace platform {
 	
 	export class AccessStatus {
@@ -466,7 +476,7 @@ export namespace prefs {
 	    minItemSize: number;
 	    sidebarWidth: number;
 	    selectionWidth: number;
-	    collectorWidth: number;
+	    monitorWidth: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Prefs(source);
@@ -494,7 +504,7 @@ export namespace prefs {
 	        this.minItemSize = source["minItemSize"];
 	        this.sidebarWidth = source["sidebarWidth"];
 	        this.selectionWidth = source["selectionWidth"];
-	        this.collectorWidth = source["collectorWidth"];
+	        this.monitorWidth = source["monitorWidth"];
 	    }
 	}
 

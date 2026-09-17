@@ -206,3 +206,14 @@ func flagsFor(name string, statFlags uint32) uint8 {
 	}
 	return f
 }
+
+// AllocatedSize is what one already-stat'd file occupies on disk, in the same
+// terms the walk records. It is exported for the monitor, which re-measures a
+// watched path directly rather than through a scan, and must not report a
+// different number for the same file than the chart does.
+func AllocatedSize(path string, fi os.FileInfo) int64 {
+	if st, ok := fi.Sys().(*unix.Stat_t); ok {
+		return int64(st.Blocks) * 512
+	}
+	return fi.Size()
+}

@@ -8,7 +8,7 @@ import {
   api,
   Caps,
   DEFAULT_CAPS,
-  CollectorState,
+  MonitorState,
   HelperStatus,
   Prefs,
   ScanSummary,
@@ -78,7 +78,13 @@ interface State {
   scans: ScanSummary[];
   activeScan: string | null;
   tabs: Record<string, TabState>;
-  collector: CollectorState;
+  monitor: MonitorState;
+  /**
+   * Set while the monitor is walking its watched folders again. A re-measure
+   * is several full walks in a row, so it needs to say which one it is on
+   * rather than just spinning.
+   */
+  measuring: { path: string; index: number; count: number } | null;
   prefs: Prefs | null;
   helper: HelperStatus | null;
   update: UpdateState | null;
@@ -87,7 +93,7 @@ interface State {
   caps: Caps;
   toasts: Toast[];
   showPrefs: boolean;
-  showCollector: boolean;
+  showMonitor: boolean;
   hiddenSpaceMount: string | null;
   confirm: Confirm | null;
   theme: 'light' | 'dark';
@@ -107,7 +113,8 @@ interface State {
   goBack(id: string): boolean;
   goForward(id: string): boolean;
   dropTab(id: string): void;
-  setCollector(c: CollectorState): void;
+  setMonitor(c: MonitorState): void;
+  setMeasuring(m: { path: string; index: number; count: number } | null): void;
   setPrefs(p: Prefs): void;
   setHelper(h: HelperStatus): void;
   setUpdate(u: UpdateState): void;
@@ -118,7 +125,7 @@ interface State {
   toast(kind: Toast['kind'], text: string, detail?: string): void;
   dismissToast(id: number): void;
   setShowPrefs(v: boolean): void;
-  setShowCollector(v: boolean): void;
+  setShowMonitor(v: boolean): void;
   setHiddenSpaceMount(m: string | null): void;
   askConfirm(c: Confirm | null): void;
 }
@@ -144,7 +151,8 @@ export const useStore = create<State>((set, get) => ({
   scans: [],
   activeScan: null,
   tabs: {},
-  collector: { items: [], total: 0, count: 0 },
+  monitor: { items: [], total: 0, count: 0, baseTotal: 0 },
+  measuring: null,
   prefs: null,
   helper: null,
   update: null,
@@ -152,7 +160,7 @@ export const useStore = create<State>((set, get) => ({
   caps: DEFAULT_CAPS,
   toasts: [],
   showPrefs: false,
-  showCollector: false,
+  showMonitor: false,
   hiddenSpaceMount: null,
   confirm: null,
   theme: 'dark',
@@ -279,7 +287,8 @@ export const useStore = create<State>((set, get) => ({
       return { tabs };
     }),
 
-  setCollector: (collector) => set({ collector }),
+  setMonitor: (monitor) => set({ monitor }),
+  setMeasuring: (measuring) => set({ measuring }),
   setPrefs: (prefs) => set({ prefs }),
   setHelper: (helper) => set({ helper }),
   setUpdate: (update) => set({ update }),
@@ -300,15 +309,15 @@ export const useStore = create<State>((set, get) => ({
 
   dismissToast: (id) => set((st) => ({ toasts: st.toasts.filter((t) => t.id !== id) })),
   setShowPrefs: (showPrefs) => set({ showPrefs }),
-  setShowCollector: (showCollector) => set({ showCollector }),
+  setShowMonitor: (showMonitor) => set({ showMonitor }),
   setHiddenSpaceMount: (hiddenSpaceMount) => set({ hiddenSpaceMount }),
   askConfirm: (confirm) => set({ confirm }),
 }));
 
-// refreshCollector pulls the tray from Go.
-export async function refreshCollector() {
+// refreshMonitor pulls the watchlist from Go.
+export async function refreshMonitor() {
   try {
-    useStore.getState().setCollector(await api.collectorList());
+    useStore.getState().setMonitor(await api.monitorList());
   } catch {
     /* the tray is not worth an error toast */
   }

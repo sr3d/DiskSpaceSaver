@@ -35,7 +35,7 @@ export function ScanView({ scan, palette, dark }: Props) {
   const setChecked = useStore((s) => s.setChecked);
   const layoutTier = useStore((s) => s.layout);
   const caps = useStore((s) => s.caps);
-  const collector = useStore((s) => s.collector);
+  const monitor = useStore((s) => s.monitor);
   const toast = useStore((s) => s.toast);
   const askConfirm = useStore((s) => s.askConfirm);
   const setActiveScan = useStore((s) => s.setActiveScan);
@@ -56,11 +56,11 @@ export function ScanView({ scan, palette, dark }: Props) {
   const [busy, setBusy] = useState(false);
   const reqSeq = useRef(0);
 
-  const collected = useMemo(() => {
+  const watched = useMemo(() => {
     const s = new Set<number>();
-    for (const it of collector.items) if (it.scanID === scan.id) s.add(it.nodeID);
+    for (const it of monitor.items) if (it.scanID === scan.id) s.add(it.nodeID);
     return s;
-  }, [collector, scan.id]);
+  }, [monitor.items, scan.id]);
 
   // load pulls the viewport, the sidebar page and the breadcrumbs for a focus.
   const load = useCallback(
@@ -239,9 +239,9 @@ export function ScanView({ scan, palette, dark }: Props) {
     setChecked(scan.id, next, 0);
   };
 
-  const collectChecked = () =>
+  const watchChecked = () =>
     act(async () => {
-      await api.collectorAdd(selLive.map((i) => ref(i.nodeID)));
+      await api.monitorAdd(selLive.map((i) => ref(i.nodeID)));
       clearChecks();
     }, 'Could not collect those items');
 
@@ -402,11 +402,11 @@ export function ScanView({ scan, palette, dark }: Props) {
           const p = await api.copyPath(ref(selected));
           toast('info', 'Path copied', middleTruncate(p, 64));
         }, 'Could not copy the path'),
-      collect: () => {
+      watch: () => {
         const ids = bulkTargets();
         if (ids.length) {
           act(async () => {
-            await api.collectorAdd(ids.map(ref));
+            await api.monitorAdd(ids.map(ref));
             clearChecks();
           }, 'Could not collect');
         }
@@ -460,10 +460,10 @@ export function ScanView({ scan, palette, dark }: Props) {
       },
       { separator: true },
       {
-        label: collected.has(id) ? 'Remove from Collector' : 'Add to Collector',
+        label: watched.has(id) ? 'Stop Watching' : 'Watch in Monitor',
         onClick: () =>
           act(
-            () => (collected.has(id) ? api.collectorRemove(scan.id, id) : api.collectorAdd([ref(id)])),
+            () => (watched.has(id) ? api.monitorRemove(scan.id, id) : api.monitorAdd([ref(id)])),
             'Could not update the collector',
           ),
       },
@@ -622,7 +622,7 @@ export function ScanView({ scan, palette, dark }: Props) {
           base2={base2}
           hovered={tab?.hovered ?? 0}
           selected={selected}
-          collected={collected}
+          watched={watched}
           loading={tab?.loading ?? false}
           onHover={(id) => patchTab(scan.id, { hovered: id })}
           onSelect={(id) => patchTab(scan.id, { selected: id })}
@@ -657,7 +657,7 @@ export function ScanView({ scan, palette, dark }: Props) {
                 }}
                 onContextMenu={(id, x, y) => setMenu({ x, y, id })}
                 onRemove={uncheck}
-                onCollect={collectChecked}
+                onWatch={watchChecked}
                 onTrash={() => doTrash(bulkTargets())}
                 onDeleteForever={() => doDeleteForever(bulkTargets())}
                 onClear={clearChecks}

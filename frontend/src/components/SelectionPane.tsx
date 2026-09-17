@@ -29,7 +29,7 @@ interface Props {
   onSelect(item: SelectedItem): void;
   onContextMenu(id: number, x: number, y: number): void;
   onRemove(id: number): void;
-  onCollect(): void;
+  onWatch(): void;
   onTrash(): void;
   onDeleteForever(): void;
   onClear(): void;
@@ -40,7 +40,7 @@ export function SelectionPane(props: Props) {
   const mod = useStore((s) => s.caps.modKey);
   const {
     items, indexOf, bytes, folders, base2, palette, dark, allowPermanent, hovered,
-    onHover, onSelect, onContextMenu, onRemove, onCollect, onTrash,
+    onHover, onSelect, onContextMenu, onRemove, onWatch, onTrash,
     onDeleteForever, onClear, onClose,
   } = props;
 
@@ -48,7 +48,7 @@ export function SelectionPane(props: Props) {
 
   return (
     <aside className="selpane" aria-label="Selected items">
-      <header className="collector-head">
+      <header className="panel-head">
         <h2 className="selpane-title">
           Selected
           {folders > 1 && <span> across {folders} folders</span>}
@@ -58,14 +58,14 @@ export function SelectionPane(props: Props) {
         </button>
       </header>
 
-      <div className="collector-total">
+      <div className="panel-total">
         <strong>{formatBytes(bytes, base2)}</strong>
         <span>
           in {live.length} item{live.length === 1 ? '' : 's'}
         </span>
       </div>
 
-      <div className="collector-list">
+      <div className="panel-list">
         {items.map((it) => {
           const isDir = it.kind === KIND_DIR || it.kind === KIND_PACKAGE;
           // An item from another folder has no place in the current list, so
@@ -76,7 +76,7 @@ export function SelectionPane(props: Props) {
           return (
             <div
               className={
-                'collected selected-item' +
+                'panel-item selected-item' +
                 (it.nodeID === hovered ? ' selected-item-hovered' : '') +
                 (it.gone ? ' selected-item-gone' : '') +
                 (it.covered ? ' selected-item-covered' : '')
@@ -92,11 +92,11 @@ export function SelectionPane(props: Props) {
               }}
             >
               <span className="row-swatch selected-swatch" style={{ background: style.fill }} aria-hidden />
-              <div className="collected-main">
-                <div className="collected-name" title={it.path || it.name}>
+              <div className="panel-item-main">
+                <div className="panel-item-name" title={it.path || it.name}>
                   {it.name || 'item'}
                 </div>
-                <div className="collected-path" title={it.path}>
+                <div className="panel-item-path" title={it.path}>
                   {it.gone
                     ? it.err || 'no longer there'
                     : it.covered
@@ -107,7 +107,7 @@ export function SelectionPane(props: Props) {
               {/* A covered item contributes nothing to the total, so showing
                   its size beside a total that excludes it invites the user to
                   add the column up and find it wrong. */}
-              <div className="collected-size">
+              <div className="panel-item-size">
                 {it.gone ? '—' : it.covered ? '' : formatBytes(it.size, base2)}
               </div>
               <button
@@ -126,12 +126,12 @@ export function SelectionPane(props: Props) {
         })}
       </div>
 
-      <footer className="collector-foot">
+      <footer className="panel-foot">
         <button className="btn btn-quiet" onClick={onClear} title="Untick everything">
           Clear
         </button>
-        <button className="btn btn-quiet" onClick={onCollect} title={`Add these to the collector (${mod}D)`}>
-          Collect
+        <button className="btn btn-quiet" onClick={onWatch} title={`Watch these in the Monitor (${mod}D)`}>
+          Watch
         </button>
         <button className="btn btn-danger" onClick={onTrash}>
           Move to Trash

@@ -14,8 +14,8 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"github.com/sr3d/diskspacesaver/internal/collector"
 	"github.com/sr3d/diskspacesaver/internal/helperclient"
+	"github.com/sr3d/diskspacesaver/internal/monitor"
 	"github.com/sr3d/diskspacesaver/internal/platform"
 	"github.com/sr3d/diskspacesaver/internal/prefs"
 	"github.com/sr3d/diskspacesaver/internal/scancache"
@@ -31,7 +31,7 @@ type App struct {
 	ctx   context.Context
 	prefs *prefs.Store
 	scans *scanstore.Store
-	tray  *collector.Collector
+	mon   *monitor.Monitor
 	cache *scancache.Cache
 	help  *helperclient.Client
 	upd   *updater.Updater
@@ -76,7 +76,7 @@ func NewApp() *App {
 	p := prefs.Load()
 	a := &App{
 		prefs: p,
-		tray:  collector.New(),
+		mon:   monitor.New(),
 		cache: scancache.Open(),
 		help:  helperclient.New(),
 	}
@@ -500,10 +500,10 @@ func (a *App) CancelScan(scanID string) { a.scans.Cancel(scanID) }
 // ListScans returns every open tab.
 func (a *App) ListScans() []scanstore.Summary { return a.scans.List() }
 
-// CloseScan discards a scan and everything the tray holds from it.
+// CloseScan discards a scan and stops watching anything from it.
 func (a *App) CloseScan(scanID string) {
 	a.scans.Close(scanID)
-	a.emit("collector:changed", a.tray.RemoveScan(scanID))
+	a.emit("monitor:changed", a.mon.RemoveScan(scanID))
 }
 
 // GetScan returns one tab's summary.
@@ -580,10 +580,10 @@ func (a *App) SetSelectionWidth(width int) (prefs.Prefs, error) {
 	return a.SetPrefs(p)
 }
 
-// SetCollectorWidth remembers how wide the user dragged the collector.
-func (a *App) SetCollectorWidth(width int) (prefs.Prefs, error) {
+// SetMonitorWidth remembers how wide the user dragged the monitor.
+func (a *App) SetMonitorWidth(width int) (prefs.Prefs, error) {
 	p := a.prefs.Get()
-	p.CollectorWidth = width
+	p.MonitorWidth = width
 	return a.SetPrefs(p)
 }
 

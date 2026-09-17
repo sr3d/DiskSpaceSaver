@@ -149,7 +149,7 @@ export interface SelectedItem {
   err?: string;
 }
 
-export interface CollectorItem {
+export interface MonitorItem {
   scanID: string;
   nodeID: number;
   path: string;
@@ -158,12 +158,21 @@ export interface CollectorItem {
   kind: number;
   scanRoot: string;
   asAdmin: boolean;
+  /** What it weighed when first watched, and when that was (unix seconds). */
+  base: number;
+  addedAt: number;
+  /** Not found at the last re-measure. Kept listed: disappearing is a result. */
+  gone: boolean;
+  /** When size was last confirmed against the disk; 0 if never. */
+  measuredAt: number;
 }
 
-export interface CollectorState {
-  items: CollectorItem[];
+export interface MonitorState {
+  items: MonitorItem[];
   total: number;
   count: number;
+  /** What these weighed between them when each was first watched. */
+  baseTotal: number;
 }
 
 export interface OpResult {
@@ -192,7 +201,7 @@ export interface Prefs {
   minItemSize: number;
   sidebarWidth: number;
   selectionWidth: number;
-  collectorWidth: number;
+  monitorWidth: number;
 }
 
 /** A page of children plus what the size filter withheld. */
@@ -371,12 +380,13 @@ export const api = {
   deletePermanently: (refs: ItemRef[]): Promise<OpResult> => App.DeletePermanently(refs as any) as any,
   rescan: (scanID: string, nodeID: number): Promise<string> => App.Rescan(scanID, nodeID),
 
-  collectorAdd: (refs: ItemRef[]): Promise<CollectorState> => App.CollectorAdd(refs as any) as any,
-  collectorRemove: (scanID: string, nodeID: number): Promise<CollectorState> =>
-    App.CollectorRemove(scanID, nodeID) as any,
-  collectorList: (): Promise<CollectorState> => App.CollectorList() as any,
-  collectorClear: (): Promise<CollectorState> => App.CollectorClear() as any,
-  collectorDeleteAll: (permanent: boolean): Promise<OpResult> => App.CollectorDeleteAll(permanent) as any,
+  monitorAdd: (refs: ItemRef[]): Promise<MonitorState> => App.MonitorAdd(refs as any) as any,
+  monitorRemove: (scanID: string, nodeID: number): Promise<MonitorState> =>
+    App.MonitorRemove(scanID, nodeID) as any,
+  monitorList: (): Promise<MonitorState> => App.MonitorList() as any,
+  monitorClear: (): Promise<MonitorState> => App.MonitorClear() as any,
+  monitorRefresh: (): Promise<MonitorState> => App.MonitorRefresh() as any,
+  monitorDeleteAll: (permanent: boolean): Promise<OpResult> => App.MonitorDeleteAll(permanent) as any,
 
   hiddenSpace: (mount: string): Promise<HiddenSpaceReport> => App.HiddenSpace(mount) as any,
   listLocalSnapshots: (mount: string): Promise<SnapshotInfo[]> => App.ListLocalSnapshots(mount) as any,
@@ -395,7 +405,7 @@ export const api = {
   setMinItemSize: (bytes: number): Promise<Prefs> => App.SetMinItemSize(bytes) as any,
   setSidebarWidth: (width: number): Promise<Prefs> => App.SetSidebarWidth(width) as any,
   setSelectionWidth: (width: number): Promise<Prefs> => App.SetSelectionWidth(width) as any,
-  setCollectorWidth: (width: number): Promise<Prefs> => App.SetCollectorWidth(width) as any,
+  setMonitorWidth: (width: number): Promise<Prefs> => App.SetMonitorWidth(width) as any,
   describeItems: (refs: ItemRef[]): Promise<SelectedItem[]> => App.DescribeItems(refs) as any,
   dropTargets: (paths: string[]): Promise<string[]> => App.DropTargets(paths) as any,
   addExclusion: (path: string): Promise<Prefs> => App.AddExclusion(path) as any,

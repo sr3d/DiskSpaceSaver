@@ -1,9 +1,9 @@
 import { useCallback, useEffect } from 'react';
 import { api, on, onFileDrop, ScanSummary } from './api';
 import { paletteByName, resolveTheme } from './colors';
-import { refreshCollector, reportError, useStore } from './store';
+import { refreshMonitor, reportError, useStore } from './store';
 import { ConfirmSheet, TitleBar, Toasts, UpdateBanner } from './components/Chrome';
-import { Collector } from './components/Collector';
+import { Monitor } from './components/Monitor';
 import { HiddenSpace } from './components/HiddenSpace';
 import { Preferences } from './components/Preferences';
 import { ScanView } from './components/ScanView';
@@ -25,13 +25,13 @@ export default function App() {
     (async () => {
       // allSettled, not all: getHelperStatus and checkFullAccess are the two
       // platform-specific calls here, and a rejection from either used to take
-      // volumes, preferences, scans, the collector and the theme down with it,
+      // volumes, preferences, scans, the monitor and the theme down with it,
       // leaving an app that looked broken for a reason that did not matter.
       const [volumes, p, scans, tray, helper, update, fda, caps] = await Promise.allSettled([
         api.listVolumes(),
         api.getPrefs(),
         api.listScans(),
-        api.collectorList(),
+        api.monitorList(),
         api.getHelperStatus(),
         api.getUpdateState(),
         api.checkFullDiskAccess(),
@@ -44,7 +44,7 @@ export default function App() {
 
       if (caps.status === 'fulfilled') s.setCaps(caps.value);
       if (volumes.status === 'fulfilled') s.setVolumes(volumes.value);
-      if (tray.status === 'fulfilled') s.setCollector(tray.value);
+      if (tray.status === 'fulfilled') s.setMonitor(tray.value);
       if (helper.status === 'fulfilled') s.setHelper(helper.value);
       if (update.status === 'fulfilled') s.setUpdate(update.value);
       if (fda.status === 'fulfilled') s.setFDA(fda.value);
@@ -88,7 +88,13 @@ export default function App() {
         if (sum.status === 'error' && sum.err) s.toast('error', `Scan of ${sum.label} failed`, sum.err);
       }),
       on('scan:opened', (id: string) => id && s.setActiveScan(id)),
-      on('collector:changed', (c: any) => c && s.setCollector(c)),
+      on('monitor:changed', (c: any) => c && s.setMonitor(c)),
+      // A re-measure is several full walks in a row, so it reports which
+      // one it is on; `done` is the only way the panel learns it is over,
+      // since the last walk sends no further progress.
+      on('monitor:measuring', (m: any) =>
+        s.setMeasuring(m && !m.done ? { path: m.path ?? '', index: m.index ?? 0, count: m.count ?? 0 } : null),
+      ),
       on('prefs:changed', (p: any) => {
         if (!p) return;
         s.setPrefs(p);
@@ -200,7 +206,7 @@ export default function App() {
     try {
       await api.closeScan(id);
       useStore.getState().setScans(await api.listScans());
-      await refreshCollector();
+      await refreshMonitor();
     } catch (err) {
       reportError('Could not close that scan', err);
     }
@@ -223,7 +229,7 @@ export default function App() {
         else if (st.hiddenSpaceMount) st.setHiddenSpaceMount(null);
         else if (st.screen === 'scan' && st.activeScan && st.tabs[st.activeScan]?.selectionOpen)
           st.patchTab(st.activeScan, { selectionOpen: false });
-        else if (st.showCollector) st.setShowCollector(false);
+        else if (st.showMonitor) st.setShowMonitor(false);
         else api.closeQuickLook();
         return;
       }
@@ -265,7 +271,7 @@ export default function App() {
       }
       if (meta && e.key.toLowerCase() === 'd') {
         e.preventDefault();
-        acts.collect?.();
+        acts.watch?.();
         return;
       }
       // Interface size. In the packaged app the menu takes these first and
@@ -392,8 +398,8 @@ export default function App() {
         case 'uiReset':
           zoomUI(0, true);
           break;
-        case 'toggleCollector':
-          st.setShowCollector(!st.showCollector);
+        case 'toggleMonitor':
+          st.setShowMonitor(!st.showMonitor);
           break;
         case 'hiddenSpace': {
           const scan = st.scans.find((x) => x.id === st.activeScan);
@@ -418,7 +424,7 @@ export default function App() {
   }
 
   return (
-    <div className={'app' + (s.showCollector ? ' with-collector' : '')} style={{ '--wails-drop-target': 'drop' } as any}>
+    <div className={'app' + (s.showMonitor ? ' with-monitor' : '')} style={{ '--wails-drop-target': 'drop' } as any}>
       <TitleBar
         scans={s.scans}
         activeID={s.activeScan}
@@ -452,7 +458,7 @@ export default function App() {
           />
         )}
 
-        {s.showCollector && <Collector base2={base2} />}
+        {s.showMonitor && <Monitor base2={base2} />}
       </main>
 
       {/* Drop feedback. The Wails runtime already marks every element whose
