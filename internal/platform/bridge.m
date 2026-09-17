@@ -164,11 +164,19 @@ void dss_watch_mouse_buttons(void) {
                                                           handler:^NSEvent *(NSEvent *e) {
             NSInteger b = [e buttonNumber];
             if (b != 3 && b != 4) return e;  // a real middle click is not ours
-            // Only when the app's own window is the one in front. A side
-            // button pressed over the folder picker, a sheet or the Quick Look
-            // panel must not move the scan view behind it.
+            // A sheet is a question, and moving the view behind one the user
+            // has not answered is never what the button meant.
             if ([NSApp modalWindow] != nil) return e;
-            if ([e window] != [NSApp mainWindow]) return e;
+            // The press must be in a window of ours. This used to compare
+            // against -[NSApplication mainWindow], which is a different
+            // question — "main" is about which window the app considers
+            // primary, not which one is under the pointer, and it is nil in
+            // states where the button should still work. It was reliably nil
+            // after a development rebuild, where the process is relaunched
+            // without ever being activated by the user, and the button then
+            // did nothing at all until the app was restarted by hand.
+            NSWindow *w = [e window];
+            if (w == nil || ![[NSApp windows] containsObject:w]) return e;
             if ([e type] == NSEventTypeOtherMouseDown) goMouseButton((int)b);
             // The release and any drag go too, or the view is left holding a
             // press it never saw begin.
