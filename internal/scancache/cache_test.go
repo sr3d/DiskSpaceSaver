@@ -38,7 +38,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	c := newCache(t)
 	src := sample()
 
-	if err := c.Save("vol-1", "/scan", src); err != nil {
+	if err := c.Save("vol-1", "/scan", src, false); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 
@@ -51,6 +51,14 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	}
 	if time.Since(meta.SavedAt) > time.Minute {
 		t.Errorf("saved-at looks wrong: %v", meta.SavedAt)
+	}
+	if meta.AsAdmin {
+		t.Error("an ordinary scan was recorded as an administrator scan")
+	}
+	// Bytes is what a progress bar divides by, so a saved entry that reports
+	// zero would silently turn the bar indeterminate for the rest of time.
+	if sn, _ := src.Snapshot(src.Root); meta.Bytes != sn.Alloc {
+		t.Errorf("meta.Bytes = %d, want the tree root's allocated total %d", meta.Bytes, sn.Alloc)
 	}
 
 	dst, savedAt, err := c.Load("vol-1")
@@ -98,7 +106,7 @@ func TestMissingEntryIsNotAnError(t *testing.T) {
 // way on every launch. Loading a corrupt entry must drop it.
 func TestCorruptEntryIsDiscarded(t *testing.T) {
 	c := newCache(t)
-	if err := c.Save("vol-1", "/scan", sample()); err != nil {
+	if err := c.Save("vol-1", "/scan", sample(), false); err != nil {
 		t.Fatal(err)
 	}
 	if err := writeFile(c.file("vol-1"), []byte("this is not a scan")); err != nil {
@@ -115,7 +123,7 @@ func TestCorruptEntryIsDiscarded(t *testing.T) {
 func TestListAndClear(t *testing.T) {
 	c := newCache(t)
 	for _, k := range []string{"vol-1", "vol-2"} {
-		if err := c.Save(k, filepath.Join("/scan", k), sample()); err != nil {
+		if err := c.Save(k, filepath.Join("/scan", k), sample(), false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -138,5 +146,28 @@ func TestPathKeyIsStableAndDistinct(t *testing.T) {
 	}
 	if a == PathKey("/Users/someone/Pictures") {
 		t.Error("different folders produced the same key")
+	}
+}
+
+// The progress bar uses a cached scan's byte total as its denominator, but an
+// administrator scan reaches trees an ordinary one cannot. Mixing the two
+// would give an ordinary rescan a target it can never reach, so the flag has
+// to survive the round trip.
+func TestAdminFlagRoundTrips(t *testing.T) {
+	c := newCache(t)
+	if err := c.Save("vol-1", "/scan", sample(), true); err != nil {
+		t.Fatal(err)
+	}
+	meta, err := c.Stat("vol-1")
+	if err != nil || meta == nil {
+		t.Fatalf("stat returned %v, %v", meta, err)
+	}
+	if !meta.AsAdmin {
+		t.Error("an administrator scan came back marked as an ordinary one")
+	}
+	for _, e := range c.List() {
+		if e.Key == "vol-1" && !e.AsAdmin {
+			t.Error("List dropped the administrator flag")
+		}
 	}
 }

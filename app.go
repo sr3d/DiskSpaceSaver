@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -151,11 +152,17 @@ func (a *App) startDockIndicator() {
 			case <-stop:
 				return
 			case <-t.C:
-				scanning, frac := a.scans.AnyScanning()
+				scanning, frac, files := a.scanProgress()
 				switch {
 				case scanning:
 					platform.SetTaskbarProgress(frac)
-					platform.SetTaskbarBadge(fmt.Sprintf("%d%%", int(frac*100)))
+					if frac >= 0 {
+						platform.SetTaskbarBadge(fmt.Sprintf("%d%%", int(frac*100)))
+					} else {
+						// No honest percentage to show, so show the one number
+						// that is certainly true.
+						platform.SetTaskbarBadge(formatCount(files))
+					}
 					wasScanning = true
 				case wasScanning:
 					platform.SetTaskbarProgress(-1)
@@ -165,6 +172,45 @@ func (a *App) startDockIndicator() {
 			}
 		}
 	}()
+}
+
+// scanProgress combines every running scan into one figure for the taskbar.
+//
+// Weighted by expected bytes rather than averaged: a terabyte drive and a
+// two-gigabyte folder are not half the work each. Deliberately not monotonic,
+// unlike a single scan's own bar — starting a second scan really does mean
+// there is more left to do, and the indicator should say so.
+func (a *App) scanProgress() (scanning bool, fraction float64, files int64) {
+	var seen, expected int64
+	var anyUnknown bool
+
+	for _, sum := range a.scans.List() {
+		if sum.Status != scanstore.StatusScanning {
+			continue
+		}
+		scanning = true
+		files += sum.Files + sum.Dirs
+		if sum.Fraction < 0 || sum.ExpectedBytes <= 0 {
+			anyUnknown = true
+			continue
+		}
+		seen += sum.Bytes
+		expected += sum.ExpectedBytes
+	}
+	if !scanning || expected <= 0 {
+		return scanning, scanstore.Indeterminate, files
+	}
+
+	fraction = float64(seen) / float64(expected)
+	if fraction > 0.995 {
+		fraction = 0.995
+	}
+	if anyUnknown && fraction > 0.9 {
+		// Part of the work has no expectation at all, so the combined figure
+		// must not imply the whole thing is nearly done.
+		fraction = 0.9
+	}
+	return true, fraction, files
 }
 
 func (a *App) stopDockIndicator() {
@@ -218,6 +264,7 @@ func (a *App) StartScan(path string, asAdmin bool) (string, error) {
 		SnapshotDepth: p.Rings,
 		MinFraction:   p.MinArcFraction,
 		MinSize:       p.MinItemSize,
+		ExpectedBytes: a.expectedBytesFor(root, a.volumeUUIDFor(root), asAdmin),
 	}
 	if asAdmin {
 		opt.NewSource = func(r string) scanstore.Source {
@@ -254,7 +301,7 @@ func (a *App) cacheWhenDone(s *scanstore.Session) {
 	if sum.Status != scanstore.StatusDone {
 		return // never cache a partial or failed walk
 	}
-	if err := a.cache.Save(cacheKey(s.Root, sum.VolumeUUID), s.Root, s.Tree); err != nil {
+	if err := a.cache.Save(cacheKey(s.Root, sum.VolumeUUID), s.Root, s.Tree, s.AsAdmin); err != nil {
 		runtime.LogWarningf(a.ctx, "could not cache scan of %s: %v", s.Root, err)
 	}
 }
@@ -281,16 +328,70 @@ func (a *App) invalidateCache(s *scanstore.Session) {
 		a.cacheMu.Lock()
 		delete(a.cacheTimers, s.ID)
 		a.cacheMu.Unlock()
-		if s.Scanning() {
+
+		// Only a complete tree may be written back. Checking Scanning() alone
+		// let a cancelled scan's partial tree be saved under the real cache
+		// key the moment anything was deleted from it — which both returns a
+		// truncated tree on the next open and poisons the size expectation
+		// derived from it. cacheWhenDone has always checked the status; this
+		// path did not.
+		sum := s.Summary()
+		if sum.Status != scanstore.StatusDone && !sum.FromCache {
 			return
 		}
 		key := cacheKey(s.Root, s.VolumeUUID)
-		if err := a.cache.Save(key, s.Root, s.Tree); err != nil {
+		if err := a.cache.Save(key, s.Root, s.Tree, s.AsAdmin); err != nil {
 			// A cache we cannot refresh is worse than none: drop it so the
 			// next open rescans instead of showing deleted files.
 			a.cache.Delete(key)
 		}
 	})
+}
+
+// expectedBytesFor estimates how much a scan of root will account for, which
+// is what turns the progress bar from a spinner into a measurement. Zero means
+// no credible expectation and the bar stays indeterminate.
+//
+// Byte totals, never file counts: our counter counts names and the filesystem
+// counts inodes, and hardlinks put those 14% apart on this machine's volume —
+// a bar that passes 100% and then stalls is worse than no bar. Bytes are also
+// the one quantity that means the same on both sides, since a cached scan
+// records the tree root's allocated total, which is exactly what a walk
+// accumulates.
+func (a *App) expectedBytesFor(root, uuid string, asAdmin bool) int64 {
+	// A previous scan of this same root is the best expectation available:
+	// same instrument, same units. It works for any folder, not just whole
+	// drives, because loose folders are cached under a path hash.
+	if a.prefs.Get().UseCache {
+		if meta, err := a.cache.Stat(cacheKey(root, uuid)); err == nil && meta != nil {
+			// An administrator scan reaches trees an ordinary one cannot, so
+			// its total is not a valid expectation for an ordinary scan of the
+			// same root, nor the other way round.
+			if meta.Bytes > 0 && meta.AsAdmin == asAdmin {
+				return meta.Bytes
+			}
+		}
+	}
+
+	// Otherwise, if the root *is* a volume, what the system says it is using.
+	// Matched exactly rather than by longest prefix: a prefix match would hand
+	// a scan of one folder the whole volume's total, and the bar would crawl
+	// at a few percent and never move.
+	vols, err := platform.ListVolumes(false)
+	if err != nil {
+		return 0
+	}
+	for _, v := range vols {
+		if v.Path == root || (v.IsRoot && (root == "/" || root == "/System/Volumes/Data")) {
+			// Deliberately not minus purgeable space. A scan cannot reach this
+			// figure anyway — it also covers snapshots, clone sharing and
+			// trees we were refused — and undershooting means the bar climbs
+			// to near full and then completes, which is the right direction to
+			// be wrong in.
+			return v.Used
+		}
+	}
+	return 0
 }
 
 func cacheKey(root, uuid string) string {
@@ -406,6 +507,15 @@ func (a *App) GetScan(scanID string) (*scanstore.Summary, error) {
 	}
 	sum := s.Summary()
 	return &sum, nil
+}
+
+// formatCount renders a count with thousands separators, for the badge.
+func formatCount(n int64) string {
+	out := strconv.FormatInt(n, 10)
+	for i := len(out) - 3; i > 0; i -= 3 {
+		out = out[:i] + "," + out[i:]
+	}
+	return out
 }
 
 func errNoScan(id string) error { return fmt.Errorf("no such scan: %s", id) }

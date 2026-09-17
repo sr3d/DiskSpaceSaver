@@ -482,6 +482,8 @@ export namespace scanstore {
 	    finishedAt?: number;
 	    stalled: boolean;
 	    stalledMs?: number;
+	    expectedBytes: number;
+	    fraction: number;
 	    fromCache: boolean;
 	    cachedAt?: number;
 	    err?: string;
@@ -507,6 +509,8 @@ export namespace scanstore {
 	        this.finishedAt = source["finishedAt"];
 	        this.stalled = source["stalled"];
 	        this.stalledMs = source["stalledMs"];
+	        this.expectedBytes = source["expectedBytes"];
+	        this.fraction = source["fraction"];
 	        this.fromCache = source["fromCache"];
 	        this.cachedAt = source["cachedAt"];
 	        this.err = source["err"];

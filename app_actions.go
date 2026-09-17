@@ -274,14 +274,44 @@ func (a *App) Rescan(scanID string, nodeID uint32) (string, error) {
 	p := a.prefs.Get()
 	sub := scanner.New(scanner.Options{Root: path, Exclusions: p.Exclusions, UseBulk: p.UseBulkScan})
 	subTree := tree.New(path)
+
+	// Rescanning a large folder takes as long as scanning it did the first
+	// time, and this call used to drain the progress channel into nothing, so
+	// the window simply sat there. It has the best denominator in the app
+	// available to it for free: what this very subtree measured last time,
+	// from the same instrument in the same units.
+	var expected int64
+	if snap, ok := s.Tree.Snapshot(nodeID); ok {
+		expected = snap.Alloc
+	}
+	progDone := make(chan struct{})
 	go func() {
-		for range sub.Progress() {
+		defer close(progDone)
+		frac := scanstore.Indeterminate
+		for pr := range sub.Progress() {
+			frac = scanstore.Fraction(pr.Bytes, expected, frac)
+			a.emit(scanstore.EventSubProgress, map[string]any{
+				"scanID":   scanID,
+				"nodeID":   nodeID,
+				"path":     pr.CurrentPath,
+				"files":    pr.Files,
+				"dirs":     pr.Dirs,
+				"bytes":    pr.Bytes,
+				"fraction": frac,
+				"done":     false,
+			})
 		}
 	}()
 	go sub.Run(a.ctx)
 	for f := range sub.Frames() {
 		subTree.Apply(f)
 	}
+	<-progDone
+	// The rescan is over either way, so the frontend must be told to stop
+	// showing it as running before any error path returns.
+	a.emit(scanstore.EventSubProgress, map[string]any{
+		"scanID": scanID, "nodeID": nodeID, "done": true, "fraction": 1.0,
+	})
 	if err := sub.Err(); err != nil {
 		return "", err
 	}

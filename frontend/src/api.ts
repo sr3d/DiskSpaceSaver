@@ -101,6 +101,26 @@ export interface ScanSummary {
   fromCache: boolean;
   cachedAt?: number;
   err?: string;
+  /** What this scan is expected to account for, in bytes; 0 when unknown. */
+  expectedBytes: number;
+  /**
+   * Completion in [0,1], or -1 when it cannot be honestly estimated. Resolved
+   * in Go, because the taskbar indicator needs the same number and both of the
+   * denominators it can draw on already live there.
+   */
+  fraction: number;
+}
+
+/** A subtree rescan, which has no scan of its own to report progress against. */
+export interface SubProgress {
+  scanID: string;
+  nodeID: number;
+  path?: string;
+  files?: number;
+  dirs?: number;
+  bytes?: number;
+  fraction: number;
+  done: boolean;
 }
 
 export interface ItemRef {

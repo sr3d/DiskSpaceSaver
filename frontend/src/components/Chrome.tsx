@@ -59,6 +59,15 @@ export function TitleBar({ scans, activeID, base2, onSelect, onClose, onNew }: T
             >
               ×
             </button>
+            {/* A determinate line only. When the fraction is unknown the
+                spinner above already says "running", and a second animation
+                sweeping under every tab would be noise. Purely decorative:
+                the scan's own bar carries the accessible reading. */}
+            {s.status === 'scanning' && s.fraction >= 0 && (
+              <div className="pbar tab-bar" aria-hidden>
+                <div className="pbar-fill" style={{ width: `${Math.min(1, s.fraction) * 100}%` }} />
+              </div>
+            )}
           </div>
         ))}
         <button className="tab tab-new" onClick={onNew} title={`New scan (${mod}T)`}>

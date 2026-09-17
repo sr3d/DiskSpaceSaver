@@ -26,6 +26,12 @@ type Meta struct {
 	SavedAt time.Time `json:"savedAt"`
 	Nodes   int       `json:"nodes"`
 	Bytes   int64     `json:"bytes"`
+	// AsAdmin records whether the scan ran with the privileged helper. An
+	// administrator scan sees trees an ordinary one cannot, so its byte total
+	// is not a valid expectation for an ordinary scan of the same root, or the
+	// other way round. The zero value is correct for entries written before
+	// this field existed.
+	AsAdmin bool `json:"asAdmin"`
 }
 
 // Cache is a directory of saved scans.
@@ -72,7 +78,7 @@ func (c *Cache) metaFile(key string) string { return filepath.Join(c.dir, safeKe
 
 // Save writes a finished scan. Writing is atomic so an interrupted save cannot
 // leave a half-written cache that fails to load next launch.
-func (c *Cache) Save(key, root string, t *tree.Tree) error {
+func (c *Cache) Save(key, root string, t *tree.Tree, asAdmin bool) error {
 	if c.dir == "" {
 		return errors.New("no cache directory")
 	}
@@ -112,7 +118,10 @@ func (c *Cache) Save(key, root string, t *tree.Tree) error {
 		return err
 	}
 
-	meta := Meta{Key: key, Root: root, SavedAt: time.Now(), Nodes: t.Count(), Bytes: rootNode.Alloc}
+	meta := Meta{
+		Key: key, Root: root, SavedAt: time.Now(),
+		Nodes: t.Count(), Bytes: rootNode.Alloc, AsAdmin: asAdmin,
+	}
 	b, _ := json.MarshalIndent(meta, "", "  ")
 	return os.WriteFile(c.metaFile(key), b, 0o644)
 }

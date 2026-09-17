@@ -172,6 +172,7 @@ kbd {
 .tabs::-webkit-scrollbar { display: none; }
 
 .tab {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -333,6 +334,55 @@ kbd {
 }
 .scanbar-right { margin-left: auto; display: flex; align-items: center; gap: 9px; }
 .scan-progress { color: var(--fg-dim); font-variant-numeric: tabular-nums; font-size: 12px; }
+
+/* ---- progress bars ---------------------------------------------------- */
+.pbar {
+  position: relative;
+  overflow: hidden;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  flex: none;
+}
+.pbar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  /* Wide enough that the last stretch of a long scan still visibly moves,
+     short enough that it does not lag behind a scan that finishes fast. */
+  transition: width 220ms linear;
+}
+.pbar-scan { width: 110px; }
+
+/* Indeterminate: a sweep, not a position. The fill has no width set in the
+   markup, so it comes entirely from here, and the animation moves it rather
+   than resizing it — animating width would read as progress being made and
+   then lost. */
+.pbar-unknown .pbar-fill {
+  width: 38%;
+  transition: none;
+  animation: pbar-sweep 1.15s ease-in-out infinite;
+}
+@keyframes pbar-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(265%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* A sweeping bar is the kind of repeating motion this setting is for. Hold
+     it still at a neutral position instead of hiding it: the bar's presence is
+     what says the scan is running. */
+  .pbar-unknown .pbar-fill { animation: none; width: 100%; opacity: 0.4; }
+}
+
+/* A scanning tab carries the same reading, at a glance, without stealing room
+   from the label. */
+.tab-bar {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 2px;
+  height: 2px;
+}
 .scan-cached { color: var(--fg-faint); font-size: 11.5px; }
 .scan-warn { color: var(--warn); font-size: 11.5px; }
 

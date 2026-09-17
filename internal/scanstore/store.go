@@ -21,7 +21,10 @@ const (
 	EventSnapshot = "scan:snapshot"
 	EventDone     = "scan:done"
 	EventTree     = "tree:changed"
-	EventScans    = "scans:changed"
+	// EventSubProgress reports a subtree rescan, which has no Session of its
+	// own and so cannot ride on EventProgress.
+	EventSubProgress = "scan:subprogress"
+	EventScans       = "scans:changed"
 )
 
 // Status is a session's lifecycle state.
@@ -64,9 +67,17 @@ type Summary struct {
 	FinishedAt   int64  `json:"finishedAt,omitempty"`
 	Stalled      bool   `json:"stalled"`
 	StalledMS    int64  `json:"stalledMs,omitempty"`
-	FromCache    bool   `json:"fromCache"`
-	CachedAt     int64  `json:"cachedAt,omitempty"`
-	Err          string `json:"err,omitempty"`
+	// ExpectedBytes is how much this scan is expected to account for, zero
+	// when nothing credible was available. Exposed so the interface can say
+	// why there is no bar, or that a folder has outgrown its last scan.
+	ExpectedBytes int64 `json:"expectedBytes"`
+	// Fraction is completion in [0,1], or -1 when it cannot be known. A
+	// float64 sentinel rather than a pointer: nil would arrive as JSON null,
+	// which the generated Wails model constructor dereferences.
+	Fraction  float64 `json:"fraction"`
+	FromCache bool    `json:"fromCache"`
+	CachedAt  int64   `json:"cachedAt,omitempty"`
+	Err       string  `json:"err,omitempty"`
 }
 
 // Session is one scan.
@@ -78,6 +89,10 @@ type Session struct {
 	AsAdmin    bool
 	Tree       *tree.Tree
 
+	// expectedBytes is set once at construction and never written again, so
+	// it needs no lock.
+	expectedBytes int64
+
 	mu         sync.RWMutex
 	status     Status
 	prog       scanner.Progress
@@ -86,6 +101,9 @@ type Session struct {
 	fromCache  bool
 	cachedAt   time.Time
 	err        string
+	// frac is maintained by the progress relay, which already holds the write
+	// lock. Deriving it inside Summary would mean writing under an RLock.
+	frac float64
 
 	cancel  context.CancelFunc
 	running atomic.Bool
@@ -101,6 +119,7 @@ func (s *Session) Summary() Summary {
 		Files: s.prog.Files, Dirs: s.prog.Dirs, Bytes: s.prog.Bytes,
 		Inaccessible: s.prog.Inaccessible, CurrentPath: s.prog.CurrentPath,
 		Stalled: s.prog.Stalled, StalledMS: s.prog.StalledMS,
+		ExpectedBytes: s.expectedBytes, Fraction: s.frac,
 		StartedAt: s.startedAt.UnixMilli(), FromCache: s.fromCache, Err: s.err,
 	}
 	if !s.finishedAt.IsZero() {
@@ -193,6 +212,7 @@ func (st *Store) Adopt(root, label, volumeUUID string, t *tree.Tree, cachedAt ti
 		ID: st.newID(), Root: root, Label: label, VolumeUUID: volumeUUID,
 		Tree: t, status: StatusDone, startedAt: time.Now(),
 		finishedAt: time.Now(), fromCache: true, cachedAt: cachedAt,
+		frac: 1,
 	}
 	st.add(s)
 	st.emit(EventScans, st.List())
@@ -223,6 +243,10 @@ type StartOptions struct {
 	MinFraction float64
 	// MinSize is the user's absolute size floor for live snapshots.
 	MinSize int64
+	// ExpectedBytes is how much this scan is expected to find, for the
+	// progress bar. Resolved by the caller, the only layer that can see the
+	// scan cache and the volume list. Zero means unknown.
+	ExpectedBytes int64
 }
 
 // Start creates a session and begins walking. It returns as soon as the
@@ -239,7 +263,9 @@ func (st *Store) Start(opt StartOptions) (*Session, error) {
 	s := &Session{
 		ID: st.newID(), Root: root, Label: label, VolumeUUID: opt.VolumeUUID,
 		AsAdmin: opt.AsAdmin, Tree: tree.New(root),
-		status: StatusScanning, startedAt: time.Now(),
+		expectedBytes: opt.ExpectedBytes,
+		status:        StatusScanning, startedAt: time.Now(),
+		frac: Indeterminate,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
@@ -271,6 +297,7 @@ func (st *Store) run(ctx context.Context, s *Session, opt StartOptions) {
 		for p := range src.Progress() {
 			s.mu.Lock()
 			s.prog = p
+			s.frac = s.fractionLocked(p.Bytes)
 			s.mu.Unlock()
 			st.emit(EventProgress, s.Summary())
 		}
@@ -307,8 +334,12 @@ func (st *Store) run(ctx context.Context, s *Session, opt StartOptions) {
 	wg.Wait()
 
 	s.Tree.Finalize()
-	s.running.Store(false)
 
+	// running is cleared under the same lock as the status, and after it.
+	// Clearing it first opened a window where Scanning() said false while
+	// Summary() still said "scanning" — and cacheWhenDone polls the former
+	// then checks the latter, so it could see the scan as finished, read a
+	// status that was not yet StatusDone, and skip saving the cache entirely.
 	s.mu.Lock()
 	s.finishedAt = time.Now()
 	switch {
@@ -319,10 +350,76 @@ func (st *Store) run(ctx context.Context, s *Session, opt StartOptions) {
 	default:
 		s.status = StatusDone
 	}
+	// Freeze the bar where the scan actually stopped. Only a completed scan
+	// earns a full bar; a cancelled one that got a third of the way through
+	// should still look a third of the way through.
+	if s.status == StatusDone {
+		s.frac = 1
+	} else if root, ok := s.Tree.Snapshot(s.Tree.Root); ok {
+		s.frac = s.fractionLocked(root.Alloc)
+	}
+	s.running.Store(false)
 	s.mu.Unlock()
 
 	st.emit(EventDone, s.Summary())
 	st.emit(EventScans, st.List())
+}
+
+// Indeterminate is the Fraction value meaning "no credible expectation".
+const Indeterminate = -1.0
+
+// runningCap holds a determinate bar just short of full until the scan really
+// finishes. Just short, not 0.99: on a well-calibrated expectation the bar
+// otherwise visibly sits at ninety-nine percent for the last stretch.
+const runningCap = 0.995
+
+// overshoot is how far past its expectation a scan may run before the bar
+// gives up on it. Some slack, because every denominator is a little wrong and
+// a bar that flickers to indeterminate over a rounding error is worse than one
+// that sits at full for a second; but not much, because the case this guards
+// against — a folder that has grown a lot since it was last scanned — would
+// otherwise hold the bar at full for most of the walk.
+const overshoot = 1.05
+
+// fractionLocked turns bytes seen into completion. The caller holds the lock.
+//
+// Monotonic, because a bar that goes backwards reads as a fault even when the
+// arithmetic behind it is right. The floor is nearly free today — Bytes only
+// grows — but the progress channel drops samples under load and the totals
+// switch source at the end, so it is worth insuring against.
+func (s *Session) fractionLocked(bytes int64) float64 {
+	return Fraction(bytes, s.expectedBytes, s.frac)
+}
+
+// Fraction turns bytes seen into completion against an expectation, holding at
+// floor so the result never goes backwards. It is exported because a subtree
+// rescan reports progress without a Session, and two copies of these rules
+// would drift apart.
+func Fraction(bytes, expected int64, floor float64) float64 {
+	// Below a megabyte an expectation is noise, not an expectation.
+	if expected < 1<<20 {
+		return Indeterminate
+	}
+	f := float64(bytes) / float64(expected)
+	if f > overshoot {
+		// The scan has walked past everything we expected it to find, so the
+		// expectation is not merely imprecise, it is disproved — the folder
+		// grew since the cached scan it came from. Pinning the bar near full
+		// for the rest of the walk would be a lie that gets worse the longer
+		// it runs; saying we no longer know is at least true, and the file
+		// count beside the bar keeps moving either way.
+		return Indeterminate
+	}
+	if f > runningCap {
+		f = runningCap
+	}
+	if f < 0 {
+		f = 0
+	}
+	if floor > f {
+		return floor // already further along; hold the floor
+	}
+	return f
 }
 
 // Cancel stops a running scan. The partial tree stays usable.
@@ -370,36 +467,19 @@ func (st *Store) CloseAll() {
 // Emit publishes an event through the store's emitter.
 func (st *Store) Emit(name string, data any) { st.emit(name, data) }
 
-// AnyScanning reports whether any session is still walking, for the Dock
-// progress indicator.
-func (st *Store) AnyScanning() (bool, float64) {
+// Scanning reports whether any session is still walking.
+//
+// The completion figure that used to live here divided entries seen by a
+// hardcoded two million, because at the time there was nothing to divide by.
+// There is now — but the expectation comes from the scan cache and the volume
+// list, neither of which this package can see, so the caller combines them.
+func (st *Store) Scanning() bool {
 	st.mu.RLock()
 	defer st.mu.RUnlock()
-	var scanning bool
-	var files, done int64
 	for _, id := range st.order {
-		s := st.byID[id]
-		if s == nil {
-			continue
+		if s := st.byID[id]; s != nil && s.Scanning() {
+			return true
 		}
-		if s.Scanning() {
-			scanning = true
-			s.mu.RLock()
-			files += s.prog.Files + s.prog.Dirs
-			s.mu.RUnlock()
-		}
-		done++
 	}
-	_ = done
-	if !scanning {
-		return false, 0
-	}
-	// There is no total to divide by during a walk, so the indicator is a
-	// saturating curve over entries seen rather than a true percentage.
-	const soft = 2_000_000.0
-	f := float64(files) / soft
-	if f > 0.98 {
-		f = 0.98
-	}
-	return true, f
+	return false
 }

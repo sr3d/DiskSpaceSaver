@@ -1,7 +1,7 @@
 // One scan tab: chart, sidebar, breadcrumbs and the actions over them.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  api, ItemRef, NodeSummary, ScanSummary, ViewportSlice, PREF_DEFAULT,
+  api, ItemRef, NodeSummary, ScanSummary, SubProgress, ViewportSlice, PREF_DEFAULT,
   KIND_DIR, KIND_PACKAGE,
 } from '../api';
 import { Palette } from '../colors';
@@ -16,6 +16,7 @@ import { SidebarColumn } from './SidebarColumn';
 import { SelectionPane } from './SelectionPane';
 import { Sunburst } from './Sunburst';
 import { ContextMenu, MenuItem } from './ContextMenu';
+import { ProgressBar } from './ProgressBar';
 
 interface Props {
   scan: ScanSummary;
@@ -138,6 +139,18 @@ export function ScanView({ scan, palette, dark }: Props) {
     });
     return unsub;
   }, [scan.id, focus, load]);
+
+  // A subtree rescan is a whole second walk with no scan record of its own, so
+  // it reports separately. Without this the window sat still for as long as
+  // the folder took, which is exactly the complaint "Open last scan" drew.
+  const [rescanning, setRescanning] = useState<SubProgress | null>(null);
+  useEffect(() => {
+    const unsub = onEvent('scan:subprogress', (p: SubProgress) => {
+      if (p?.scanID !== scan.id) return;
+      setRescanning(p.done ? null : p);
+    });
+    return unsub;
+  }, [scan.id]);
 
   // ---- actions -----------------------------------------------------------
   const ref = (id: number): ItemRef => ({ scanID: scan.id, nodeID: id });
@@ -453,6 +466,11 @@ export function ScanView({ scan, palette, dark }: Props) {
         <div className="scanbar-right">
           {scan.status === 'scanning' ? (
             <>
+              <ProgressBar
+                fraction={scan.stalled ? -1 : scan.fraction}
+                label={`Scanning ${scan.label}`}
+                className="pbar-scan"
+              />
               <span className="scan-progress" title={scan.currentPath}>
                 {formatCount(scan.files)} files · {formatBytes(scan.bytes, base2)}
               </span>
@@ -464,6 +482,17 @@ export function ScanView({ scan, palette, dark }: Props) {
               <button className="btn btn-quiet" onClick={() => api.cancelScan(scan.id)}>
                 Stop
               </button>
+            </>
+          ) : rescanning ? (
+            <>
+              <ProgressBar
+                fraction={rescanning.fraction}
+                label="Rescanning this folder"
+                className="pbar-scan"
+              />
+              <span className="scan-progress" title={rescanning.path}>
+                rescanning · {formatCount(rescanning.files ?? 0)} files
+              </span>
             </>
           ) : (
             <>

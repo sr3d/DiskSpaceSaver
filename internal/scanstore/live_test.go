@@ -84,3 +84,154 @@ func TestLiveViewportDoesNotStallTheWalk(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 	}
 }
+
+// makeTree writes a directory of files big enough that the walk takes long
+// enough to sample, without depending on anything outside the test.
+func makeTree(t *testing.T, dirs, filesPer int, size int) (root string, bytes int64) {
+	t.Helper()
+	root = t.TempDir()
+	buf := make([]byte, size)
+	for d := 0; d < dirs; d++ {
+		dir := filepath.Join(root, "d"+string(rune('a'+d%26))+string(rune('a'+d/26)))
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for f := 0; f < filesPer; f++ {
+			p := filepath.Join(dir, "f"+string(rune('a'+f%26))+".bin")
+			if err := os.WriteFile(p, buf, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			bytes += int64(size)
+		}
+	}
+	return root, bytes
+}
+
+func run(t *testing.T, root string, expected int64) (*scanstore.Session, []float64) {
+	t.Helper()
+	var seen []float64
+	st := scanstore.New(func(name string, data any) {
+		if name != scanstore.EventProgress {
+			return
+		}
+		if sum, ok := data.(scanstore.Summary); ok {
+			seen = append(seen, sum.Fraction)
+		}
+	})
+	s, err := st.Start(scanstore.StartOptions{
+		Root: root,
+		NewSource: func(r string) scanstore.Source {
+			return scanner.New(scanner.Options{Root: r})
+		},
+		SnapshotDepth:    3,
+		SnapshotInterval: 20 * time.Millisecond,
+		ExpectedBytes:    expected,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(60 * time.Second)
+	for s.Summary().Status == scanstore.StatusScanning {
+		if time.Now().After(deadline) {
+			t.Fatal("scan did not finish")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	return s, seen
+}
+
+// The bar's contract, end to end against a real walk rather than against the
+// arithmetic alone: it never goes backwards, never claims to be finished while
+// it is still running, and reads exactly full when it is.
+func TestProgressFractionOverARealScan(t *testing.T) {
+	root, want := makeTree(t, 12, 20, 96*1024)
+
+	// An expectation deliberately a little larger than the truth, which is how
+	// a volume's used bytes behaves: the walk cannot reach it.
+	s, seen := run(t, root, want+want/10)
+
+	sum := s.Summary()
+	if sum.Status != scanstore.StatusDone {
+		t.Fatalf("status %q: %s", sum.Status, sum.Err)
+	}
+	if sum.Fraction != 1 {
+		t.Errorf("a completed scan reads %v, not full", sum.Fraction)
+	}
+	if sum.ExpectedBytes != want+want/10 {
+		t.Errorf("expectation not carried through: %d", sum.ExpectedBytes)
+	}
+
+	prev := 0.0
+	for i, f := range seen {
+		if f < 0 {
+			t.Fatalf("sample %d was indeterminate despite a good expectation", i)
+		}
+		if f < prev {
+			t.Errorf("sample %d went backwards: %v after %v", i, f, prev)
+		}
+		if f >= 1 {
+			t.Errorf("sample %d claimed the scan was finished while it ran: %v", i, f)
+		}
+		prev = f
+	}
+}
+
+// With nothing to divide by, every reading must say so. A bar sitting at zero
+// would be indistinguishable from a scan that never started.
+func TestProgressIsIndeterminateWithoutAnExpectation(t *testing.T) {
+	root, _ := makeTree(t, 4, 8, 4096)
+	s, seen := run(t, root, 0)
+
+	for i, f := range seen {
+		if f != scanstore.Indeterminate {
+			t.Fatalf("sample %d claimed %v with no expectation to divide by", i, f)
+		}
+	}
+	// Completion is knowable even when the way there was not.
+	if got := s.Summary().Fraction; got != 1 {
+		t.Errorf("a finished scan reads %v, not full", got)
+	}
+}
+
+// A cancelled scan should look like what it was — stopped part way — not like
+// one that finished.
+func TestCancelledScanFreezesTheBar(t *testing.T) {
+	root, want := makeTree(t, 26, 26, 128*1024)
+
+	var st *scanstore.Store
+	st = scanstore.New(func(name string, data any) {
+		if name != scanstore.EventProgress {
+			return
+		}
+		if sum, ok := data.(scanstore.Summary); ok && sum.Fraction > 0.1 {
+			st.Cancel(sum.ID)
+		}
+	})
+	s, err := st.Start(scanstore.StartOptions{
+		Root: root,
+		NewSource: func(r string) scanstore.Source {
+			return scanner.New(scanner.Options{Root: r})
+		},
+		SnapshotDepth:    3,
+		SnapshotInterval: 10 * time.Millisecond,
+		ExpectedBytes:    want,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(60 * time.Second)
+	for s.Summary().Status == scanstore.StatusScanning {
+		if time.Now().After(deadline) {
+			t.Fatal("scan did not finish")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	sum := s.Summary()
+	if sum.Status != scanstore.StatusCancelled {
+		t.Skipf("scan finished as %q before the cancel landed", sum.Status)
+	}
+	if sum.Fraction == 1 {
+		t.Error("a cancelled scan reads as fully complete")
+	}
+}
