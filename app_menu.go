@@ -41,7 +41,7 @@ func (a *App) buildMenu() *menu.Menu {
 	item.AddText("Show in Finder", keys.Combo("r", keys.CmdOrCtrlKey, keys.ShiftKey), cmd("reveal"))
 	// Space and Return are bound in the frontend, guarded against text
 	// input; as menu accelerators they would swallow every keystroke.
-	item.AddText("Quick Look", nil, cmd("quickLook"))
+	item.AddText("Quick Look", keys.CmdOrCtrl("y"), cmd("quickLook"))
 	item.AddText("Get Info", keys.CmdOrCtrl("i"), cmd("getInfo"))
 	item.AddText("Open", keys.CmdOrCtrl("o"), cmd("open"))
 	item.AddSeparator()

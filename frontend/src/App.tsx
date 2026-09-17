@@ -233,7 +233,23 @@ export default function App() {
         else api.closeQuickLook();
         return;
       }
-      if (e.key === ' ' && !meta) {
+      // A sheet is a question; the view behind it must not move while it is
+      // unanswered. Everything below this point navigates or acts on a row.
+      const busy = () => {
+        const st = useStore.getState();
+        return !!(st.confirm || st.showPrefs || st.hiddenSpaceMount);
+      };
+
+      // Space ticks the row, the way it does in a file list with checkboxes.
+      // It used to open Quick Look, which now lives on the menu's ⌘Y: ticking
+      // is the thing done to dozens of rows in a row, and preview the thing
+      // done to one, so Space belongs to the repeated action.
+      if (e.key === ' ' && !meta && !busy()) {
+        e.preventDefault();
+        acts.toggleCheck?.();
+        return;
+      }
+      if (meta && e.key.toLowerCase() === 'y') {
         e.preventDefault();
         acts.quickLook?.();
         return;
@@ -242,6 +258,42 @@ export default function App() {
         e.preventDefault();
         acts.zoomIn?.();
         return;
+      }
+      // Walking the list, and in and out of folders — the arrangement a file
+      // list in column form has: up and down move, right goes in, left comes
+      // back out. Bare presses only, so Alt+arrow stays back and forward and
+      // ⌘↑ stays "up one level".
+      if (!meta && !e.altKey && !busy()) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          acts.selectNext?.();
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          acts.selectPrev?.();
+          return;
+        }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          acts.zoomIn?.();
+          return;
+        }
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          acts.zoomOut?.();
+          return;
+        }
+        if (e.key === 'Home') {
+          e.preventDefault();
+          acts.selectFirst?.();
+          return;
+        }
+        if (e.key === 'End') {
+          e.preventDefault();
+          acts.selectLast?.();
+          return;
+        }
       }
       if (meta && e.key === 'ArrowUp') {
         e.preventDefault();

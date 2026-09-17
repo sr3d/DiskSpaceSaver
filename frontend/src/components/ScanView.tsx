@@ -284,6 +284,21 @@ export function ScanView({ scan, palette, dark }: Props) {
     navigateTo(scan.id, id);
   };
 
+  // Walking the list from the keyboard. With nothing selected yet, a press
+  // starts at whichever end the key is heading away from, so the first Down
+  // lands on the largest item rather than on nothing.
+  const moveSelection = (delta: number) => {
+    if (rows.length === 0) return;
+    const at = rows.findIndex((r) => r.id === selected);
+    const next =
+      at < 0
+        ? delta > 0
+          ? 0
+          : rows.length - 1
+        : Math.max(0, Math.min(rows.length - 1, at + delta));
+    patchTab(scan.id, { selected: rows[next].id });
+  };
+
   // Walks to where an item lives and highlights it there. A selected item may
   // be two folders away, and highlighting a handle the current list has no row
   // for would look like the click did nothing.
@@ -299,11 +314,16 @@ export function ScanView({ scan, palette, dark }: Props) {
   // tree, not the trail.
   const zoomOut = () => {
     if (trail.length >= 2) navigate(trail[trail.length - 2].id);
-    else setScreen('volumes');
   };
 
+  // Back stops at the scan root. It used to fall through to the volume list,
+  // which meant one press too many at the top of a scan threw away the tab the
+  // user was working in — and since nothing on screen distinguishes "no
+  // history left" from "one more step", the only way to find out was to lose
+  // your place. The way out of a scan is the breadcrumb or the home button,
+  // both of which say where they go.
   const back = () => {
-    if (!goBack(scan.id)) setScreen('volumes');
+    goBack(scan.id);
   };
   const forward = () => goForward(scan.id);
 
@@ -414,6 +434,11 @@ export function ScanView({ scan, palette, dark }: Props) {
       trash: () => doTrash(bulkTargets()),
       deleteForever: () => doDeleteForever(bulkTargets()),
       selectAll: () => setChecked(scan.id, new Set(rows.map((r) => r.id)), rows[0]?.id ?? 0),
+      selectPrev: () => moveSelection(-1),
+      selectNext: () => moveSelection(+1),
+      selectFirst: () => rows.length > 0 && patchTab(scan.id, { selected: rows[0].id }),
+      selectLast: () => rows.length > 0 && patchTab(scan.id, { selected: rows[rows.length - 1].id }),
+      toggleCheck: () => selected && toggleCheck(selected, false),
       zoomIn: () => selectedRow?.hasKids && navigate(selected),
       zoomOut: () => zoomOut(),
       back,
