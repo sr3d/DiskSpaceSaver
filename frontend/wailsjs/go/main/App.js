@@ -82,6 +82,10 @@ export function GetAppInfo() {
   return window['go']['main']['App']['GetAppInfo']();
 }
 
+export function GetCapabilities() {
+  return window['go']['main']['App']['GetCapabilities']();
+}
+
 export function GetChildCount(arg1, arg2) {
   return window['go']['main']['App']['GetChildCount'](arg1, arg2);
 }

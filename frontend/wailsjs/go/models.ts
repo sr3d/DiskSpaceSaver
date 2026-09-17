@@ -63,67 +63,6 @@ export namespace collector {
 
 }
 
-export namespace macos {
-	
-	export class FDAStatus {
-	    granted: boolean;
-	    probe: string;
-	    detail?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new FDAStatus(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.granted = source["granted"];
-	        this.probe = source["probe"];
-	        this.detail = source["detail"];
-	    }
-	}
-	export class Volume {
-	    name: string;
-	    path: string;
-	    uuid: string;
-	    total: number;
-	    free: number;
-	    availRaw: number;
-	    purgeable: number;
-	    used: number;
-	    removable: boolean;
-	    internal: boolean;
-	    network: boolean;
-	    readOnly: boolean;
-	    isRoot: boolean;
-	    fs: string;
-	    icon?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new Volume(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.name = source["name"];
-	        this.path = source["path"];
-	        this.uuid = source["uuid"];
-	        this.total = source["total"];
-	        this.free = source["free"];
-	        this.availRaw = source["availRaw"];
-	        this.purgeable = source["purgeable"];
-	        this.used = source["used"];
-	        this.removable = source["removable"];
-	        this.internal = source["internal"];
-	        this.network = source["network"];
-	        this.readOnly = source["readOnly"];
-	        this.isRoot = source["isRoot"];
-	        this.fs = source["fs"];
-	        this.icon = source["icon"];
-	    }
-	}
-
-}
-
 export namespace main {
 	
 	export class AppInfo {
@@ -132,6 +71,7 @@ export namespace main {
 	    bundled: boolean;
 	    bundleID: string;
 	    teamID: string;
+	    caps: platform.Caps;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppInfo(source);
@@ -144,7 +84,26 @@ export namespace main {
 	        this.bundled = source["bundled"];
 	        this.bundleID = source["bundleID"];
 	        this.teamID = source["teamID"];
+	        this.caps = this.convertValues(source["caps"], platform.Caps);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class CacheEntry {
 	    key: string;
@@ -350,6 +309,103 @@ export namespace main {
 	        this.succeeded = source["succeeded"];
 	        this.failed = source["failed"];
 	        this.bytes = source["bytes"];
+	    }
+	}
+
+}
+
+export namespace platform {
+	
+	export class AccessStatus {
+	    granted: boolean;
+	    probe: string;
+	    detail?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AccessStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.granted = source["granted"];
+	        this.probe = source["probe"];
+	        this.detail = source["detail"];
+	    }
+	}
+	export class Caps {
+	    os: string;
+	    preview: boolean;
+	    properties: boolean;
+	    snapshots: boolean;
+	    purgeable: boolean;
+	    helper: boolean;
+	    helperInstall: boolean;
+	    fullDiskAccess: boolean;
+	    revealLabel: string;
+	    trashLabel: string;
+	    trashVerb: string;
+	    propertiesLabel: string;
+	    modKey: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Caps(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.os = source["os"];
+	        this.preview = source["preview"];
+	        this.properties = source["properties"];
+	        this.snapshots = source["snapshots"];
+	        this.purgeable = source["purgeable"];
+	        this.helper = source["helper"];
+	        this.helperInstall = source["helperInstall"];
+	        this.fullDiskAccess = source["fullDiskAccess"];
+	        this.revealLabel = source["revealLabel"];
+	        this.trashLabel = source["trashLabel"];
+	        this.trashVerb = source["trashVerb"];
+	        this.propertiesLabel = source["propertiesLabel"];
+	        this.modKey = source["modKey"];
+	    }
+	}
+	export class Volume {
+	    name: string;
+	    path: string;
+	    uuid: string;
+	    total: number;
+	    free: number;
+	    used: number;
+	    availRaw: number;
+	    purgeable: number;
+	    removable: boolean;
+	    internal: boolean;
+	    network: boolean;
+	    readOnly: boolean;
+	    isRoot: boolean;
+	    fs: string;
+	    icon?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Volume(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.uuid = source["uuid"];
+	        this.total = source["total"];
+	        this.free = source["free"];
+	        this.used = source["used"];
+	        this.availRaw = source["availRaw"];
+	        this.purgeable = source["purgeable"];
+	        this.removable = source["removable"];
+	        this.internal = source["internal"];
+	        this.network = source["network"];
+	        this.readOnly = source["readOnly"];
+	        this.isRoot = source["isRoot"];
+	        this.fs = source["fs"];
+	        this.icon = source["icon"];
 	    }
 	}
 

@@ -1,6 +1,6 @@
 //go:build darwin
 
-package macos
+package platform
 
 import "C"
 

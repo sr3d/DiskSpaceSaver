@@ -10,7 +10,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/sr3d/diskspacesaver/internal/collector"
-	"github.com/sr3d/diskspacesaver/internal/macos"
+	"github.com/sr3d/diskspacesaver/internal/platform"
 	"github.com/sr3d/diskspacesaver/internal/scanner"
 	"github.com/sr3d/diskspacesaver/internal/scanstore"
 	"github.com/sr3d/diskspacesaver/internal/tree"
@@ -97,7 +97,7 @@ func (a *App) RevealInFinder(refs []ItemRef) error {
 	if len(ps) == 0 {
 		return firstFailure(res, "nothing to reveal")
 	}
-	return macos.Reveal(ps)
+	return platform.Reveal(ps)
 }
 
 // QuickLook toggles the Quick Look panel over the items.
@@ -106,12 +106,12 @@ func (a *App) QuickLook(refs []ItemRef, index int) error {
 	if len(ps) == 0 {
 		return firstFailure(res, "nothing to preview")
 	}
-	macos.QuickLook(ps, index)
+	platform.PreviewItems(ps, index)
 	return nil
 }
 
 // CloseQuickLook hides the preview panel.
-func (a *App) CloseQuickLook() { macos.CloseQuickLook() }
+func (a *App) CloseQuickLook() { platform.ClosePreview() }
 
 // GetInfo opens Finder's Get Info window.
 func (a *App) GetInfo(ref ItemRef) error {
@@ -119,7 +119,7 @@ func (a *App) GetInfo(ref ItemRef) error {
 	if err != nil {
 		return err
 	}
-	return macos.GetInfo(p)
+	return platform.ShowProperties(p)
 }
 
 // OpenItem opens an item with its default application.
@@ -128,7 +128,7 @@ func (a *App) OpenItem(ref ItemRef) error {
 	if err != nil {
 		return err
 	}
-	return macos.Open(p)
+	return platform.Open(p)
 }
 
 // CopyPath puts an item's path on the clipboard.
@@ -181,7 +181,7 @@ func (a *App) deleteItems(refs []ItemRef, toTrash bool) (Result, error) {
 
 		var opErr error
 		if toTrash {
-			_, opErr = macos.Trash(path)
+			_, opErr = platform.Trash(path)
 		} else {
 			opErr = os.RemoveAll(path)
 		}
@@ -399,7 +399,7 @@ func (a *App) PreviewItem(ref ItemRef, maxPoints int) (*Preview, error) {
 	if scanner.Kind(n.Kind) == scanner.KindDir {
 		return p, nil
 	}
-	p.Image = macos.Thumbnail(path, maxPoints, 2)
+	p.Image = platform.Thumbnail(path, maxPoints, 2)
 	a.previewToCache(key, p.Image)
 	return p, nil
 }

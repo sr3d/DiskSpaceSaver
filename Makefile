@@ -43,6 +43,10 @@ LDFLAGS       := -X main.Version=$(VERSION) -X main.Build=$(BUILD)
 SPARKLE_VERSION := 2.6.4
 SPARKLE_DIR     := third_party/Sparkle
 SPARKLE_FW      := $(SPARKLE_DIR)/Sparkle.framework
+# Target-aware, not host-aware. Deciding this from a directory on the build
+# machine meant a Windows target built on a Mac with Sparkle vendored got
+# -tags sparkle, which excludes the stub driver and does not include the darwin
+# one — a build failure with no obvious cause.
 GO_TAGS       := $(if $(wildcard $(SPARKLE_FW)),sparkle,)
 
 # cgo vets linker flags against an allowlist that excludes @executable_path.

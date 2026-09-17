@@ -1,8 +1,6 @@
 package updater
 
 import (
-	"os/exec"
-	"strings"
 	"sync"
 )
 
@@ -32,14 +30,9 @@ var (
 	osVer  string
 )
 
+// osVersion is reported with update events so a release that breaks on one
+// OS version is visible as such.
 func osVersion() string {
-	osOnce.Do(func() {
-		out, err := exec.Command("/usr/bin/sw_vers", "-productVersion").Output()
-		if err != nil {
-			osVer = "unknown"
-			return
-		}
-		osVer = strings.TrimSpace(string(out))
-	})
+	osOnce.Do(func() { osVer = readOSVersion() })
 	return osVer
 }

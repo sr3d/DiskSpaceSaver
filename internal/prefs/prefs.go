@@ -8,11 +8,9 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-)
 
-// AppDirName is the folder under Application Support that holds prefs and the
-// scan cache.
-const AppDirName = "DiskSpaceSaver"
+	"github.com/sr3d/diskspacesaver/internal/platform"
+)
 
 // CurrentVersion is the preferences schema version. It exists so a changed
 // default can reach people who already have a preferences file: without it,
@@ -159,18 +157,10 @@ type Store struct {
 	path string
 }
 
-// SupportDir is ~/Library/Application Support/DiskSpaceSaver, created on demand.
-func SupportDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	dir := filepath.Join(home, "Library", "Application Support", AppDirName)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
-	}
-	return dir, nil
-}
+// SupportDir is where preferences and the scan cache live, created on demand.
+// The location is the platform's business — Application Support on macOS,
+// %APPDATA% on Windows — so this just forwards.
+func SupportDir() (string, error) { return platform.SupportDir() }
 
 // Load reads preferences, filling in defaults for anything missing. A corrupt
 // file is replaced rather than surfaced: losing preferences is a nuisance,

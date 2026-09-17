@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"github.com/sr3d/diskspacesaver/internal/helperclient"
-	"github.com/sr3d/diskspacesaver/internal/macos"
+	"github.com/sr3d/diskspacesaver/internal/platform"
 	"github.com/sr3d/diskspacesaver/internal/updater"
 )
 
@@ -23,8 +23,8 @@ type HelperStatus struct {
 func (a *App) GetHelperStatus() HelperStatus {
 	st := HelperStatus{
 		Status:       a.help.Status(),
-		Registration: macos.HelperRegistration(),
-		Bundled:      macos.IsBundled(),
+		Registration: platform.HelperRegistration(),
+		Bundled:      platform.IsPackaged(),
 	}
 	st.NeedsApproval = st.Registration == "requires-approval"
 	switch {
@@ -43,10 +43,10 @@ func (a *App) GetHelperStatus() HelperStatus {
 // InstallHelper registers the privileged helper with launchd. The user is
 // asked to approve it in System Settings the first time.
 func (a *App) InstallHelper() (HelperStatus, error) {
-	if !macos.IsBundled() {
+	if !platform.IsPackaged() {
 		return a.GetHelperStatus(), errors.New("the helper can only be installed from the packaged app")
 	}
-	if err := macos.RegisterHelper(); err != nil {
+	if err := platform.RegisterHelper(); err != nil {
 		return a.GetHelperStatus(), err
 	}
 	a.help.Close() // drop the cached unavailable status
@@ -57,7 +57,7 @@ func (a *App) InstallHelper() (HelperStatus, error) {
 
 // UninstallHelper removes the privileged helper.
 func (a *App) UninstallHelper() (HelperStatus, error) {
-	if err := macos.UnregisterHelper(); err != nil {
+	if err := platform.UnregisterHelper(); err != nil {
 		return a.GetHelperStatus(), err
 	}
 	a.help.Close()
@@ -67,7 +67,7 @@ func (a *App) UninstallHelper() (HelperStatus, error) {
 }
 
 // OpenLoginItemsSettings shows the pane where a pending helper is approved.
-func (a *App) OpenLoginItemsSettings() { macos.OpenLoginItemsSettings() }
+func (a *App) OpenLoginItemsSettings() { platform.OpenHelperApprovalSettings() }
 
 // ---------------------------------------------------------------- updater
 

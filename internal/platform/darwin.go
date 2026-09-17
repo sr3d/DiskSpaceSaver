@@ -1,9 +1,9 @@
 //go:build darwin
 
-// Package macos wraps the AppKit and Security calls the app needs. Everything
-// that touches AppKit is marshalled onto the main thread inside the ObjC shim,
-// because bound API calls arrive on arbitrary goroutines.
-package macos
+// macOS implementation. Everything that touches AppKit is marshalled onto the
+// main thread inside the ObjC shim, because bound API calls arrive on
+// arbitrary goroutines.
+package platform
 
 /*
 #cgo CFLAGS: -x objective-c -fobjc-arc -Wno-deprecated-declarations
@@ -25,25 +25,6 @@ import (
 	"sync"
 	"unsafe"
 )
-
-// Volume describes a mounted filesystem.
-type Volume struct {
-	Name      string `json:"name"`
-	Path      string `json:"path"`
-	UUID      string `json:"uuid"`
-	Total     int64  `json:"total"`
-	Free      int64  `json:"free"`     // available for important usage — Finder's number
-	AvailRaw  int64  `json:"availRaw"` // available without evicting purgeable data
-	Purgeable int64  `json:"purgeable"`
-	Used      int64  `json:"used"`
-	Removable bool   `json:"removable"`
-	Internal  bool   `json:"internal"`
-	Network   bool   `json:"network"`
-	ReadOnly  bool   `json:"readOnly"`
-	IsRoot    bool   `json:"isRoot"`
-	FS        string `json:"fs"`
-	Icon      string `json:"icon,omitempty"`
-}
 
 func goString(c *C.char) string {
 	if c == nil {
@@ -140,8 +121,8 @@ func Reveal(paths []string) error {
 	return errFrom(C.dss_reveal((**C.char)(unsafe.Pointer(arr)), C.int(len(paths))))
 }
 
-// GetInfo opens Finder's Get Info window for a path.
-func GetInfo(path string) error {
+// ShowProperties opens Finder's Get Info window for a path.
+func ShowProperties(path string) error {
 	cp := C.CString(path)
 	defer C.free(unsafe.Pointer(cp))
 	return errFrom(C.dss_get_info(cp))
@@ -161,8 +142,8 @@ func OpenURL(url string) error {
 	return errFrom(C.dss_open_url(cu))
 }
 
-// QuickLook toggles the Quick Look panel over the given paths.
-func QuickLook(paths []string, index int) {
+// PreviewItems toggles the Quick Look panel over the given paths.
+func PreviewItems(paths []string, index int) {
 	if len(paths) == 0 {
 		return
 	}
@@ -171,44 +152,37 @@ func QuickLook(paths []string, index int) {
 	C.dss_quicklook((**C.char)(unsafe.Pointer(arr)), C.int(len(paths)), C.int(index))
 }
 
-// CloseQuickLook hides the panel if it is up.
-func CloseQuickLook() { C.dss_quicklook_close() }
+// ClosePreview hides the panel if it is up.
+func ClosePreview() { C.dss_quicklook_close() }
 
-// QuickLookVisible reports whether the panel is showing.
-func QuickLookVisible() bool { return bool(C.dss_quicklook_visible()) }
+// PreviewVisible reports whether the panel is showing.
+func PreviewVisible() bool { return bool(C.dss_quicklook_visible()) }
 
-// SetDockBadge sets the Dock icon badge; empty clears it.
-func SetDockBadge(text string) {
+// SetTaskbarBadge sets the Dock icon badge; empty clears it.
+func SetTaskbarBadge(text string) {
 	ct := C.CString(text)
 	defer C.free(unsafe.Pointer(ct))
 	C.dss_set_dock_badge(ct)
 }
 
-// SetDockProgress draws a progress bar on the Dock icon. Negative clears it.
-func SetDockProgress(fraction float64) { C.dss_set_dock_progress(C.double(fraction)) }
+// SetTaskbarProgress draws a progress bar on the Dock icon. Negative clears it.
+func SetTaskbarProgress(fraction float64) { C.dss_set_dock_progress(C.double(fraction)) }
 
-// IsBundled reports whether the process is running from a .app. Several
+// IsPackaged reports whether the process is running from a .app. Several
 // features (the updater, helper registration) only work when it is.
-func IsBundled() bool { return bool(C.dss_is_bundled()) }
+func IsPackaged() bool { return bool(C.dss_is_bundled()) }
 
-// BundleID is the running bundle's identifier.
-func BundleID() string { return goString(C.dss_bundle_id()) }
+// AppID is the running bundle's identifier.
+func AppID() string { return goString(C.dss_bundle_id()) }
 
-// TeamID is the Team ID from the running code's own signature, empty when
+// SigningID is the Team ID from the running code's own signature, empty when
 // unsigned or ad-hoc signed.
-func TeamID() string { return goString(C.dss_team_id()) }
+func SigningID() string { return goString(C.dss_team_id()) }
 
-// FDAStatus reports whether the app has Full Disk Access.
-type FDAStatus struct {
-	Granted bool   `json:"granted"`
-	Probe   string `json:"probe"`
-	Detail  string `json:"detail,omitempty"`
-}
-
-// CheckFullDiskAccess probes a TCC-protected location. Reading the TCC
+// CheckFullAccess probes a TCC-protected location. Reading the TCC
 // database itself is the canonical test: nothing but a Full Disk Access
 // grant makes it readable, and the probe has no side effects.
-func CheckFullDiskAccess() FDAStatus {
+func CheckFullAccess() AccessStatus {
 	home, _ := os.UserHomeDir()
 	probes := []string{
 		filepath.Join(home, "Library/Application Support/com.apple.TCC/TCC.db"),
@@ -227,16 +201,16 @@ func CheckFullDiskAccess() FDAStatus {
 		f, err := os.Open(p)
 		if err == nil {
 			f.Close()
-			return FDAStatus{Granted: true, Probe: p}
+			return AccessStatus{Granted: true, Probe: p}
 		}
 		if os.IsPermission(err) {
-			return FDAStatus{Granted: false, Probe: p, Detail: err.Error()}
+			return AccessStatus{Granted: false, Probe: p, Detail: err.Error()}
 		}
 		lastErr = err.Error()
 	}
 	// Every probe was absent: assume granted rather than nag the user with a
 	// prompt we cannot substantiate.
-	return FDAStatus{Granted: true, Probe: "none available", Detail: lastErr}
+	return AccessStatus{Granted: true, Probe: "none available", Detail: lastErr}
 }
 
 // FDASettingsURL deep-links to the Full Disk Access pane.
@@ -245,12 +219,6 @@ const FDASettingsURL = "x-apple.systempreferences:com.apple.preference.security?
 // LoginItemsSettingsURL deep-links to Login Items, where a registered daemon
 // must be approved.
 const LoginItemsSettingsURL = "x-apple.systempreferences:com.apple.LoginItems-Settings.extension"
-
-// Snapshot is one APFS local Time Machine snapshot.
-type Snapshot struct {
-	Name string `json:"name"`
-	Date string `json:"date"`
-}
 
 // ListLocalSnapshots reads the APFS local snapshots for a mount point. These
 // are a common reason a volume reports far less free space than the visible
@@ -295,15 +263,6 @@ func DeleteLocalSnapshot(mount, name string) error {
 		return fmt.Errorf("tmutil deletelocalsnapshots %s: %s", date, strings.TrimSpace(string(out)))
 	}
 	return nil
-}
-
-// PurgeableBytes is the gap between what Finder says is available and what is
-// actually free right now.
-func PurgeableBytes(v Volume) int64 {
-	if v.Free > v.AvailRaw {
-		return v.Free - v.AvailRaw
-	}
-	return 0
 }
 
 // FormatBytes renders a byte count the way the UI does, for log and menu text.
@@ -369,5 +328,40 @@ func HelperRegistration() string {
 	return goString(C.dss_helper_status(cn))
 }
 
-// OpenLoginItemsSettings shows the pane where a pending helper is approved.
-func OpenLoginItemsSettings() { C.dss_open_login_items_settings() }
+// OpenHelperApprovalSettings shows the pane where a pending helper is approved.
+func OpenHelperApprovalSettings() { C.dss_open_login_items_settings() }
+
+// Capabilities describes what the macOS build can do.
+func Capabilities() Caps {
+	return Caps{
+		OS:              "darwin",
+		Preview:         true,
+		Properties:      true,
+		Snapshots:       true,
+		Purgeable:       true,
+		Helper:          true,
+		HelperInstall:   true,
+		FullDiskAccess:  true,
+		RevealLabel:     "Show in Finder",
+		TrashLabel:      "Trash",
+		TrashVerb:       "Move to Trash",
+		PropertiesLabel: "Get Info",
+		ModKey:          "\u2318",
+	}
+}
+
+// OpenAccessSettings opens the pane where the access grant is given.
+func OpenAccessSettings() error { return OpenURL(FDASettingsURL) }
+
+// SupportDir is where preferences and the scan cache live.
+func SupportDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(home, "Library", "Application Support", AppDirName)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	return dir, nil
+}

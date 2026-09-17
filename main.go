@@ -6,7 +6,6 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/options/mac"
 
 	"github.com/sr3d/diskspacesaver/internal/updater"
 )
@@ -26,7 +25,7 @@ func main() {
 	updater.SetVersion(Version, Build)
 	app := NewApp()
 
-	err := wails.Run(&options.App{
+	opts := &options.App{
 		Title:       "DiskSpaceSaver",
 		Width:       1180,
 		Height:      780,
@@ -45,18 +44,15 @@ func main() {
 			EnableFileDrop:     true,
 			DisableWebViewDrop: false,
 		},
-		Mac: &mac.Options{
-			TitleBar:             mac.TitleBarHiddenInset(),
-			Appearance:           mac.DefaultAppearance,
-			WebviewIsTransparent: false,
-			WindowIsTranslucent:  false,
-			About: &mac.AboutInfo{
-				Title:   "DiskSpaceSaver",
-				Message: "See what is using your disk, and get it back.\nVersion " + Version + " (" + Build + ")",
-			},
-		},
 		Bind: []any{app},
-	})
+	}
+
+	// Window decoration and appearance are the one part of the shell that
+	// cannot be shared: macOS hides the title bar and inlays the traffic
+	// lights, Windows keeps its own.
+	applyPlatformOptions(opts)
+
+	err := wails.Run(opts)
 	if err != nil {
 		println("DiskSpaceSaver could not start:", err.Error())
 	}

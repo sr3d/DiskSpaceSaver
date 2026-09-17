@@ -15,7 +15,7 @@ import (
 
 	"github.com/sr3d/diskspacesaver/internal/collector"
 	"github.com/sr3d/diskspacesaver/internal/helperclient"
-	"github.com/sr3d/diskspacesaver/internal/macos"
+	"github.com/sr3d/diskspacesaver/internal/platform"
 	"github.com/sr3d/diskspacesaver/internal/prefs"
 	"github.com/sr3d/diskspacesaver/internal/scancache"
 	"github.com/sr3d/diskspacesaver/internal/scanner"
@@ -96,8 +96,8 @@ func (a *App) emit(name string, data any) {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
-	macos.WatchVolumes(func() {
-		vols, err := macos.ListVolumes(true)
+	platform.WatchVolumes(func() {
+		vols, err := platform.ListVolumes(true)
 		if err != nil {
 			return
 		}
@@ -112,9 +112,9 @@ func (a *App) startup(ctx context.Context) {
 // the close; we never do.
 func (a *App) shutdown(ctx context.Context) {
 	a.stopDockIndicator()
-	macos.UnwatchVolumes()
-	macos.SetDockBadge("")
-	macos.SetDockProgress(-1)
+	platform.UnwatchVolumes()
+	platform.SetTaskbarBadge("")
+	platform.SetTaskbarProgress(-1)
 	a.scans.CloseAll()
 	a.help.Close()
 }
@@ -140,12 +140,12 @@ func (a *App) startDockIndicator() {
 				scanning, frac := a.scans.AnyScanning()
 				switch {
 				case scanning:
-					macos.SetDockProgress(frac)
-					macos.SetDockBadge(fmt.Sprintf("%d%%", int(frac*100)))
+					platform.SetTaskbarProgress(frac)
+					platform.SetTaskbarBadge(fmt.Sprintf("%d%%", int(frac*100)))
 					wasScanning = true
 				case wasScanning:
-					macos.SetDockProgress(-1)
-					macos.SetDockBadge("")
+					platform.SetTaskbarProgress(-1)
+					platform.SetTaskbarBadge("")
 					wasScanning = false
 				}
 			}
@@ -165,8 +165,8 @@ func (a *App) stopDockIndicator() {
 // ---------------------------------------------------------------- volumes
 
 // ListVolumes returns every mounted volume with its capacity bars.
-func (a *App) ListVolumes() ([]macos.Volume, error) {
-	return macos.ListVolumes(true)
+func (a *App) ListVolumes() ([]platform.Volume, error) {
+	return platform.ListVolumes(true)
 }
 
 // ---------------------------------------------------------------- scanning
@@ -287,7 +287,7 @@ func cacheKey(root, uuid string) string {
 }
 
 func (a *App) volumeUUIDFor(root string) string {
-	vols, err := macos.ListVolumes(false)
+	vols, err := platform.ListVolumes(false)
 	if err != nil {
 		return ""
 	}
@@ -307,7 +307,7 @@ func (a *App) volumeUUIDFor(root string) string {
 }
 
 func (a *App) labelFor(root string) string {
-	vols, _ := macos.ListVolumes(false)
+	vols, _ := platform.ListVolumes(false)
 	for _, v := range vols {
 		if v.Path == root || (v.IsRoot && root == "/System/Volumes/Data") {
 			return v.Name
@@ -564,10 +564,15 @@ func (a *App) RemoveExclusion(path string) (prefs.Prefs, error) {
 // ---------------------------------------------------------------- system
 
 // CheckFullDiskAccess reports whether the app can read every user's files.
-func (a *App) CheckFullDiskAccess() macos.FDAStatus { return macos.CheckFullDiskAccess() }
+func (a *App) CheckFullDiskAccess() platform.AccessStatus { return platform.CheckFullAccess() }
 
-// OpenFDASettings deep-links to the Full Disk Access pane.
-func (a *App) OpenFDASettings() error { return macos.OpenURL(macos.FDASettingsURL) }
+// GetCapabilities tells the frontend what this platform can do, so it can
+// label itself correctly and leave out what does not exist here.
+func (a *App) GetCapabilities() platform.Caps { return platform.Capabilities() }
+
+// OpenFDASettings deep-links to whatever grants full access, where the
+// platform has such a thing.
+func (a *App) OpenFDASettings() error { return platform.OpenAccessSettings() }
 
 // ChooseFolder opens the native folder picker and returns what was chosen.
 func (a *App) ChooseFolder() (string, error) {
@@ -579,11 +584,12 @@ func (a *App) ChooseFolder() (string, error) {
 
 // AppInfo is what the About panel and the updater UI show.
 type AppInfo struct {
-	Version  string `json:"version"`
-	Build    string `json:"build"`
-	Bundled  bool   `json:"bundled"`
-	BundleID string `json:"bundleID"`
-	TeamID   string `json:"teamID"`
+	Version  string        `json:"version"`
+	Build    string        `json:"build"`
+	Bundled  bool          `json:"bundled"`
+	BundleID string        `json:"bundleID"`
+	TeamID   string        `json:"teamID"`
+	Caps     platform.Caps `json:"caps"`
 }
 
 // GetAppInfo describes the running build.
@@ -591,8 +597,9 @@ func (a *App) GetAppInfo() AppInfo {
 	return AppInfo{
 		Version:  Version,
 		Build:    Build,
-		Bundled:  macos.IsBundled(),
-		BundleID: macos.BundleID(),
-		TeamID:   macos.TeamID(),
+		Bundled:  platform.IsPackaged(),
+		BundleID: platform.AppID(),
+		TeamID:   platform.SigningID(),
+		Caps:     platform.Capabilities(),
 	}
 }

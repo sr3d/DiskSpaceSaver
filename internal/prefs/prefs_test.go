@@ -3,6 +3,7 @@ package prefs
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -81,11 +82,17 @@ func TestMigrationAppliesTheSizeFilterDefault(t *testing.T) {
 // the struct is filled with defaults before the file is decoded, so a version
 // read from the decoded struct would always look current.
 func TestLoadMigratesAFileWithoutAVersion(t *testing.T) {
+	// Point the support directory at a temporary home. Where that lands is
+	// the platform's business, so the test asks for it rather than assuming.
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	dir := filepath.Join(home, "Library", "Application Support", AppDirName)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	t.Setenv("APPDATA", home)
+	dir, err := SupportDir()
+	if err != nil {
 		t.Fatal(err)
+	}
+	if !strings.HasPrefix(dir, home) {
+		t.Skipf("support directory %s is outside the temporary home; cannot isolate", dir)
 	}
 	// A file as written before the size filter existed.
 	old := `{"base2":true,"theme":"dark","rings":7,"minItemSize":0}`

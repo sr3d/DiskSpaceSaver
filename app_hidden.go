@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sr3d/diskspacesaver/internal/macos"
+	"github.com/sr3d/diskspacesaver/internal/platform"
 )
 
 // SnapshotInfo is one APFS local Time Machine snapshot.
@@ -53,11 +53,11 @@ type HiddenSpaceReport struct {
 
 // HiddenSpace builds the report for a mounted volume.
 func (a *App) HiddenSpace(mount string) (*HiddenSpaceReport, error) {
-	vols, err := macos.ListVolumes(false)
+	vols, err := platform.ListVolumes(false)
 	if err != nil {
 		return nil, err
 	}
-	var vol *macos.Volume
+	var vol *platform.Volume
 	for i := range vols {
 		if vols[i].Path == mount || (vols[i].IsRoot && (mount == "/" || mount == "/System/Volumes/Data")) {
 			vol = &vols[i]
@@ -77,7 +77,7 @@ func (a *App) HiddenSpace(mount string) (*HiddenSpaceReport, error) {
 	}
 
 	// Snapshots.
-	snaps, _ := macos.ListLocalSnapshots(vol.Path)
+	snaps, _ := platform.ListLocalSnapshots(vol.Path)
 	for _, s := range snaps {
 		rep.Snapshots = append(rep.Snapshots, SnapshotInfo{Name: s.Name, Date: s.Date})
 	}
@@ -161,7 +161,7 @@ func (a *App) DeleteLocalSnapshots(mount string, names []string) (Result, error)
 		return res, errors.New("no snapshots selected")
 	}
 	for _, n := range names {
-		err := macos.DeleteLocalSnapshot(mount, n)
+		err := platform.DeleteLocalSnapshot(mount, n)
 		if err != nil && a.help.Available() {
 			// Some snapshots need root even though most do not.
 			err = a.help.DeleteSnapshots([]string{n})
@@ -181,7 +181,7 @@ func (a *App) DeleteLocalSnapshots(mount string, names []string) (Result, error)
 
 // ListLocalSnapshots returns the APFS local snapshots on a volume.
 func (a *App) ListLocalSnapshots(mount string) ([]SnapshotInfo, error) {
-	snaps, err := macos.ListLocalSnapshots(mount)
+	snaps, err := platform.ListLocalSnapshots(mount)
 	if err != nil {
 		return nil, err
 	}
@@ -194,5 +194,5 @@ func (a *App) ListLocalSnapshots(mount string) ([]SnapshotInfo, error) {
 
 // OpenStorageSettings opens the system's own storage management pane.
 func (a *App) OpenStorageSettings() error {
-	return macos.OpenURL("x-apple.systempreferences:com.apple.settings.Storage")
+	return platform.OpenURL("x-apple.systempreferences:com.apple.settings.Storage")
 }
