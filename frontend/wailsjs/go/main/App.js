@@ -74,6 +74,10 @@ export function DescribeItems(arg1) {
   return window['go']['main']['App']['DescribeItems'](arg1);
 }
 
+export function DropTargets(arg1) {
+  return window['go']['main']['App']['DropTargets'](arg1);
+}
+
 export function FindNode(arg1, arg2) {
   return window['go']['main']['App']['FindNode'](arg1, arg2);
 }
@@ -208,6 +212,10 @@ export function RevealInFinder(arg1) {
 
 export function ScanCacheBytes() {
   return window['go']['main']['App']['ScanCacheBytes']();
+}
+
+export function SetCollectorWidth(arg1) {
+  return window['go']['main']['App']['SetCollectorWidth'](arg1);
 }
 
 export function SetMinItemSize(arg1) {

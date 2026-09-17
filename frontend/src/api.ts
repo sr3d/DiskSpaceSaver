@@ -4,7 +4,7 @@
 // viewport slices keyed by opaque uint32 handles. A handle of 0 is the
 // synthetic "other" wedge and must never be passed to an action.
 import * as App from '../wailsjs/go/main/App';
-import { EventsOn, EventsEmit } from '../wailsjs/runtime/runtime';
+import { EventsOn, EventsEmit, OnFileDrop, OnFileDropOff } from '../wailsjs/runtime/runtime';
 
 export type Kind = 0 | 1 | 2 | 3 | 4; // file, dir, symlink, package, other
 
@@ -192,6 +192,7 @@ export interface Prefs {
   minItemSize: number;
   sidebarWidth: number;
   selectionWidth: number;
+  collectorWidth: number;
 }
 
 /** A page of children plus what the size filter withheld. */
@@ -394,7 +395,9 @@ export const api = {
   setMinItemSize: (bytes: number): Promise<Prefs> => App.SetMinItemSize(bytes) as any,
   setSidebarWidth: (width: number): Promise<Prefs> => App.SetSidebarWidth(width) as any,
   setSelectionWidth: (width: number): Promise<Prefs> => App.SetSelectionWidth(width) as any,
+  setCollectorWidth: (width: number): Promise<Prefs> => App.SetCollectorWidth(width) as any,
   describeItems: (refs: ItemRef[]): Promise<SelectedItem[]> => App.DescribeItems(refs) as any,
+  dropTargets: (paths: string[]): Promise<string[]> => App.DropTargets(paths) as any,
   addExclusion: (path: string): Promise<Prefs> => App.AddExclusion(path) as any,
   removeExclusion: (path: string): Promise<Prefs> => App.RemoveExclusion(path) as any,
 
@@ -423,3 +426,13 @@ export function on(event: string, handler: (...data: any[]) => void): () => void
 }
 
 export { EventsEmit };
+
+/**
+ * Folders dropped on the window. The second argument tells the runtime to fire
+ * only for drops that land on an element carrying --wails-drop-target, which
+ * the app shell and the volume list both set.
+ */
+export function onFileDrop(handler: (paths: string[]) => void): () => void {
+  OnFileDrop((_x: number, _y: number, paths: string[]) => handler(paths ?? []), true);
+  return () => OnFileDropOff();
+}

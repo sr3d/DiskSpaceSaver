@@ -83,8 +83,12 @@ export function TitleBar({ scans, activeID, base2, onSelect, onClose, onNew }: T
         >
           Collector{collector.count > 0 && <em>{formatBytes(collector.total, base2)}</em>}
         </button>
-        <button className="icon-btn" onClick={() => setShowPrefs(true)} title={`Preferences (${mod},)`} aria-label="Preferences">
-          ⚙
+        {/* The gear alone was a guess: nothing in the bar said what it opened.
+            Labelled like the Collector beside it, so both read as the same
+            kind of control. */}
+        <button className="chip" onClick={() => setShowPrefs(true)} title={`Settings (${mod},)`}>
+          <span aria-hidden>⚙</span>
+          Settings
         </button>
       </div>
     </div>

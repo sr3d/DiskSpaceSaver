@@ -466,6 +466,7 @@ export namespace prefs {
 	    minItemSize: number;
 	    sidebarWidth: number;
 	    selectionWidth: number;
+	    collectorWidth: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Prefs(source);
@@ -493,6 +494,7 @@ export namespace prefs {
 	        this.minItemSize = source["minItemSize"];
 	        this.sidebarWidth = source["sidebarWidth"];
 	        this.selectionWidth = source["selectionWidth"];
+	        this.collectorWidth = source["collectorWidth"];
 	    }
 	}
 

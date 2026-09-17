@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import { api, on, ScanSummary } from './api';
+import { api, on, onFileDrop, ScanSummary } from './api';
 import { paletteByName, resolveTheme } from './colors';
 import { refreshCollector, reportError, useStore } from './store';
 import { ConfirmSheet, TitleBar, Toasts, UpdateBanner } from './components/Chrome';
@@ -159,6 +159,23 @@ export default function App() {
       reportError('Could not start that scan', err);
     }
   }, []);
+
+  // Dropping a folder on the window scans it. The window has advertised
+  // itself as a drop target since the first build and Go enables file drop,
+  // but nothing was listening, so a drop did nothing — "Add a Folder" was the
+  // only way in.
+  useEffect(() => {
+    return onFileDrop(async (paths) => {
+      if (!paths.length) return;
+      try {
+        const dirs = await api.dropTargets(paths);
+        // One tab per dropped folder, but not a dozen from a careless drop.
+        for (const dir of dirs.slice(0, 4)) await startScan(dir, false);
+      } catch (err) {
+        reportError('Could not scan what was dropped', err);
+      }
+    });
+  }, [startScan]);
 
   const chooseFolder = useCallback(async () => {
     try {

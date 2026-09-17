@@ -44,6 +44,8 @@ export function DeletePermanently(arg1:Array<main.ItemRef>):Promise<main.Result>
 
 export function DescribeItems(arg1:Array<main.ItemRef>):Promise<Array<main.SelectedItem>>;
 
+export function DropTargets(arg1:Array<string>):Promise<Array<string>>;
+
 export function FindNode(arg1:string,arg2:string):Promise<number>;
 
 export function GetAncestors(arg1:string,arg2:number):Promise<Array<tree.NodeSummary>>;
@@ -111,6 +113,8 @@ export function Rescan(arg1:string,arg2:number):Promise<string>;
 export function RevealInFinder(arg1:Array<main.ItemRef>):Promise<void>;
 
 export function ScanCacheBytes():Promise<number>;
+
+export function SetCollectorWidth(arg1:number):Promise<prefs.Prefs>;
 
 export function SetMinItemSize(arg1:number):Promise<prefs.Prefs>;
 

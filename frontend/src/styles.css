@@ -41,6 +41,11 @@
   --shadow: 0 10px 34px rgba(12, 14, 22, 0.16);
   --radius: 10px;
   --titlebar-h: 40px;
+  /* The height of the bar across the top of a panel. The breadcrumb strip and
+     the collector's header sit side by side in the same row of the window, so
+     a difference of a few pixels shows up as two misaligned rules running
+     across the screen. One token, so they cannot drift apart. */
+  --bar-h: 42px;
 
   /* Set from JS alongside the document zoom. Anything that has to keep its
      physical size divides by this. */
@@ -274,8 +279,14 @@ kbd {
 
 /* ---------------------------------------------------------------- buttons */
 
+/* min-height rather than height, and never wrapping: a label that wrapped
+   inside a fixed 28px box had its second line cut off, which is what happened
+   to "Move to Trash" once the interface was zoomed enough for the footer to
+   run out of width. Buttons keep their words and the footer wraps instead. */
 .btn {
-  height: 28px; padding: 0 13px;
+  min-height: 28px; padding: 5px 13px;
+  line-height: 1.3;
+  white-space: nowrap;
   border: 1px solid var(--line-strong); border-radius: 7px;
   background: var(--bg-raised); color: var(--fg);
   font-size: 12px; font-weight: 500;
@@ -361,8 +372,9 @@ kbd {
 
 .scanbar {
   flex: none;
+  min-height: var(--bar-h);
   display: flex; align-items: center; gap: 12px;
-  padding: 7px 14px;
+  padding: 0 14px;
   border-bottom: 1px solid var(--line);
   background: var(--bg);
 }
@@ -454,7 +466,7 @@ kbd {
   background: var(--bg-raised);
   border-left: 1px solid var(--line);
 }
-.sidecol-body {
+.col-body {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -758,8 +770,10 @@ kbd {
 .selcol .inspector { flex: 0 0 auto; max-height: 45%; overflow-y: auto; }
 .selpane-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .selpane-title span { font-weight: 400; color: var(--fg-faint); }
-.selpane .collector-foot { flex-wrap: wrap; }
-.selpane .collector-foot .btn { flex: 1 1 42%; }
+/* The two destructive buttons belong on their own row, away from Clear and
+   Collect, so a mis-aimed click at a narrow width lands on something
+   recoverable. */
+.selpane .collector-foot .btn-danger { flex-basis: 100%; }
 .selected-item { cursor: default; }
 .selected-item:hover, .selected-item-hovered { background: var(--row-hover); }
 .selected-swatch { flex: none; }
@@ -771,10 +785,17 @@ kbd {
 
 /* ---------------------------------------------------------------- collector */
 
-.collector {
-  flex: 0 1 330px;
+.collector-col {
+  position: relative;
+  flex: 0 1 auto;
   min-width: 210px;
+  display: flex;
+  background: var(--bg-raised);
   border-left: 1px solid var(--line);
+}
+.collector {
+  flex: 1 1 auto;
+  min-height: 0;
   background: var(--bg-raised);
   display: flex; flex-direction: column;
 }
@@ -789,14 +810,16 @@ kbd {
    First the collector stops taking a column of its own and floats over the
    sidebar; the tray is a transient thing to act on, not a third panel worth
    permanently crowding the chart. */
-[data-layout='medium'] .collector,
-[data-layout='narrow'] .collector {
+[data-layout='medium'] .collector-col,
+[data-layout='narrow'] .collector-col {
     position: absolute;
     top: 0; right: 0; bottom: 0;
-    width: min(330px, 78%);
+    width: min(330px, 78%) !important;
     z-index: 20;
     box-shadow: var(--shadow);
 }
+[data-layout='medium'] .collector-col .resizer,
+[data-layout='narrow'] .collector-col .resizer { display: none; }
 
 /* Then, when even two columns will not fit, the sidebar moves below the chart
    rather than squeezing it out sideways. */
@@ -844,6 +867,10 @@ kbd {
   display: flex; align-items: center; justify-content: space-between;
   padding: 11px 14px; border-bottom: 1px solid var(--line);
 }
+/* The collector is a column beside the whole scan view, so its header is in
+   the same row of the window as the breadcrumb strip. Same height, same rule
+   across the screen. */
+.collector-head { min-height: var(--bar-h); padding: 0 14px; }
 .collector-head h2, .sheet-head h2 { margin: 0; font-size: 14px; font-weight: 600; }
 
 .collector-empty { padding: 30px 22px; text-align: center; color: var(--fg-faint); }
@@ -867,8 +894,13 @@ kbd {
 .collected-path { color: var(--fg-faint); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .collected-size { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--fg-dim); }
 
-.collector-foot { display: flex; gap: 7px; padding: 11px; border-top: 1px solid var(--line); }
-.collector-foot .btn { flex: 1; }
+/* Wraps onto as many rows as it needs, and each button is at least as wide as
+   its own label, so nothing is ever squeezed narrower than its words. */
+.collector-foot {
+  display: flex; flex-wrap: wrap; gap: 7px;
+  padding: 11px; border-top: 1px solid var(--line);
+}
+.collector-foot .btn { flex: 1 1 auto; min-width: max-content; }
 
 /* ---------------------------------------------------------------- sheets */
 

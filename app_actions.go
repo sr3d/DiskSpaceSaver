@@ -100,6 +100,51 @@ func (a *App) paths(refs []ItemRef) ([]string, Result) {
 	return out, res
 }
 
+// ---------------------------------------------------------------- drops
+
+// DropTargets turns paths dropped on the window into folders worth scanning.
+//
+// The window has advertised itself as a drop target since the first build and
+// the Go side enables file drop, but nothing was listening on the other end,
+// so a dropped folder did nothing at all — the "Add a Folder" button was the
+// only way in.
+//
+// A dropped file becomes the folder holding it: a single file has no
+// composition to chart, and the thing someone means by dropping one on a disk
+// map is "show me where this lives". Duplicates collapse, so dropping a folder
+// and three files from inside it opens one tab rather than four.
+func (a *App) DropTargets(paths []string) ([]string, error) {
+	out := make([]string, 0, len(paths))
+	seen := map[string]bool{}
+	var firstErr error
+	for _, p := range paths {
+		if p == "" {
+			continue
+		}
+		fi, err := os.Stat(p)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		dir := p
+		if !fi.IsDir() {
+			dir = filepath.Dir(p)
+		}
+		dir = filepath.Clean(dir)
+		if seen[dir] {
+			continue
+		}
+		seen[dir] = true
+		out = append(out, dir)
+	}
+	if len(out) == 0 && firstErr != nil {
+		return out, firstErr
+	}
+	return out, nil
+}
+
 // ---------------------------------------------------------------- selection
 
 // SelectedItem describes one ticked row for the selection pane.

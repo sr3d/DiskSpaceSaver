@@ -1,8 +1,14 @@
 // The drop tray. Items gathered from any scan, with the total they would
 // reclaim and one button to get rid of all of them.
+import { useCallback } from 'react';
 import { api } from '../api';
 import { formatBytes, middleTruncate } from '../format';
 import { reportError, useStore } from '../store';
+import { ResizableColumn } from './ResizableColumn';
+
+const MIN = 220;
+const MAX = 900;
+const DEFAULT = 330;
 
 interface Props {
   base2: boolean;
@@ -15,6 +21,15 @@ export function Collector({ base2 }: Props) {
   const toast = useStore((s) => s.toast);
   const allowPermanent = useStore((s) => s.prefs?.allowPermanentDelete ?? false);
   const caps = useStore((s) => s.caps);
+  const width = useStore((s) => s.prefs?.collectorWidth ?? DEFAULT);
+  const setPrefs = useStore((s) => s.setPrefs);
+  const uiScale = useStore((s) => s.prefs?.uiScale ?? 1);
+  const commitWidth = useCallback(
+    (w: number) => {
+      api.setCollectorWidth(w).then(setPrefs).catch(() => {});
+    },
+    [setPrefs],
+  );
 
   const deleteAll = (permanent: boolean) => {
     askConfirm({
@@ -42,6 +57,16 @@ export function Collector({ base2 }: Props) {
   };
 
   return (
+    <ResizableColumn
+      className="collector-col"
+      width={width}
+      min={MIN}
+      max={MAX}
+      fallback={DEFAULT}
+      uiScale={uiScale}
+      onCommit={commitWidth}
+      label="the collector"
+    >
     <aside className="collector" aria-label="Collector">
       <header className="collector-head">
         <h2>Collector</h2>
@@ -104,5 +129,6 @@ export function Collector({ base2 }: Props) {
         </>
       )}
     </aside>
+    </ResizableColumn>
   );
 }

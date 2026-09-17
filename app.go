@@ -580,6 +580,13 @@ func (a *App) SetSelectionWidth(width int) (prefs.Prefs, error) {
 	return a.SetPrefs(p)
 }
 
+// SetCollectorWidth remembers how wide the user dragged the collector.
+func (a *App) SetCollectorWidth(width int) (prefs.Prefs, error) {
+	p := a.prefs.Get()
+	p.CollectorWidth = width
+	return a.SetPrefs(p)
+}
+
 // GetChildCount is how many children a node has, for sidebar paging.
 func (a *App) GetChildCount(scanID string, nodeID uint32) (int, error) {
 	s, ok := a.scans.Get(scanID)

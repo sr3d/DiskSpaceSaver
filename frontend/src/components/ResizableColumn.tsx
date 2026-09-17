@@ -115,7 +115,7 @@ export function ResizableColumn(props: Props) {
         tabIndex={0}
         title="Drag to resize · double-click to reset"
       />
-      <div className="sidecol-body">{children}</div>
+      <div className="col-body">{children}</div>
     </div>
   );
 }
