@@ -232,6 +232,14 @@ func WatchVolumes(fn func()) {
 	}()
 }
 
+// WatchMouseButtons is a no-op here. WebView2 delivers the fourth and fifth
+// mouse buttons to the DOM as button 3 and 4, so the frontend handles them
+// itself and nothing has to be taken off the event queue first.
+func WatchMouseButtons(func(int)) {}
+
+// UnwatchMouseButtons is the matching no-op.
+func UnwatchMouseButtons() {}
+
 // UnwatchVolumes stops the poll.
 func UnwatchVolumes() {
 	volMu.Lock()

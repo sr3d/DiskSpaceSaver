@@ -16,6 +16,11 @@ char *dss_list_volumes(bool with_icons);
 void dss_watch_volumes(void);
 void dss_unwatch_volumes(void);
 
+// Begin/stop taking the fourth and fifth mouse buttons out of the event
+// stream and reporting them to goMouseButton.
+void dss_watch_mouse_buttons(void);
+void dss_unwatch_mouse_buttons(void);
+
 // Finder integration. Each returns NULL on success or an error string.
 char *dss_trash(const char *path, char **out_new_path);
 char *dss_reveal(const char *const *paths, int n);

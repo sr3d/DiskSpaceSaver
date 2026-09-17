@@ -64,15 +64,26 @@ func (a *App) resolve(ref ItemRef) (*scanstore.Session, string, error) {
 
 // withinRoot is the containment guard for every destructive operation.
 func withinRoot(root, path string) bool {
-	root = filepath.Clean(root)
-	path = filepath.Clean(path)
+	return pathWithin(filepath.Clean(root), filepath.Clean(path), string(filepath.Separator))
+}
+
+// pathWithin reports whether path sits strictly inside root. Both must already
+// be cleaned; the separator is a parameter so the Windows shape of this check
+// can be exercised from any platform, which is where it went wrong.
+//
+// Clean keeps the trailing separator on a volume root — "/" on Unix, "C:\" on
+// Windows — so appending another one produces a prefix no path can match. On
+// Unix that only ever affected a scan of "/", which had its own branch here;
+// on Windows it is every scan of a whole drive, and it refused every delete in
+// one.
+func pathWithin(root, path, sep string) bool {
 	if root == path {
 		return false // never operate on the scan root itself
 	}
-	if root == "/" {
-		return strings.HasPrefix(path, "/") && len(path) > 1
+	if strings.HasSuffix(root, sep) {
+		return strings.HasPrefix(path, root) && len(path) > len(root)
 	}
-	return strings.HasPrefix(path, root+string(filepath.Separator))
+	return strings.HasPrefix(path, root+sep)
 }
 
 func (a *App) paths(refs []ItemRef) ([]string, Result) {

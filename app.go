@@ -104,6 +104,19 @@ func (a *App) startup(ctx context.Context) {
 		a.emit("volumes:changed", vols)
 	})
 
+	// The fourth and fifth mouse buttons. On macOS they are taken off the
+	// event queue before the WebView sees them, so this is the only route they
+	// have; on Windows the WebView delivers them to the DOM and this is a
+	// no-op. Either way they end up in the same command table as the menu.
+	platform.WatchMouseButtons(func(button int) {
+		switch button {
+		case 3:
+			a.emit("menu:command", "back")
+		case 4:
+			a.emit("menu:command", "forward")
+		}
+	})
+
 	a.startDockIndicator()
 	a.upd.Start(ctx, a.emit)
 }
@@ -113,6 +126,7 @@ func (a *App) startup(ctx context.Context) {
 func (a *App) shutdown(ctx context.Context) {
 	a.stopDockIndicator()
 	platform.UnwatchVolumes()
+	platform.UnwatchMouseButtons()
 	platform.SetTaskbarBadge("")
 	platform.SetTaskbarProgress(-1)
 	a.scans.CloseAll()

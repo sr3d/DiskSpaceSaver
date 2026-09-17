@@ -72,6 +72,7 @@ GB macOS reports as purgeable lands within **0.73%** of Finder's used figure.
 |---|---|
 | `⌘=` / `⌘-` / `⌘0` | interface bigger, smaller, back to normal |
 | `⌘[` / `⌘]` | back and forward through folders you have visited (also the mouse side buttons) |
+| `⌫` | back, the way Explorer's Backspace does — the forward-delete key too |
 | `Return` / `⌘↑` | zoom into the selected folder, up one level |
 | `Space` | Quick Look |
 | `⌘I` · `⌘⇧R` · `⌘O` | Get Info · Show in Finder · Open |
@@ -208,4 +209,8 @@ unit-tested. See `docs/WINDOWS.md`.
 
 ## Licence
 
-Not yet chosen.
+MIT. See [LICENSE](LICENSE).
+
+Sparkle is fetched at build time rather than vendored here and carries its own
+MIT licence; the Nunito font under `frontend/src/assets/fonts` is under the SIL
+Open Font License, whose text sits beside it.

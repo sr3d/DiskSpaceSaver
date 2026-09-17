@@ -141,6 +141,50 @@ void dss_unwatch_volumes(void) {
     });
 }
 
+#pragma mark - Mouse side buttons
+
+// The fourth and fifth mouse buttons, which every browser uses for back and
+// forward.
+//
+// WebKit does read NSEvent.buttonNumber and does have a notion of these two
+// (PlatformEventFactoryMac maps 3 and 4 to MouseButton::Back and ::Forward),
+// but what the WebView goes on to do with them is its own business: it may
+// walk its own history, which here would navigate out of the app, or drop
+// them before the DOM ever sees them. A local monitor takes them off the
+// queue first, so exactly one thing can happen — the app's own back and
+// forward — whatever the WebView would have done.
+static id gMouseMon = nil;
+
+void dss_watch_mouse_buttons(void) {
+    onMainSync(^{
+        if (gMouseMon != nil) return;
+        NSEventMask mask = NSEventMaskOtherMouseDown | NSEventMaskOtherMouseUp |
+                           NSEventMaskOtherMouseDragged;
+        gMouseMon = [NSEvent addLocalMonitorForEventsMatchingMask:mask
+                                                          handler:^NSEvent *(NSEvent *e) {
+            NSInteger b = [e buttonNumber];
+            if (b != 3 && b != 4) return e;  // a real middle click is not ours
+            // Only when the app's own window is the one in front. A side
+            // button pressed over the folder picker, a sheet or the Quick Look
+            // panel must not move the scan view behind it.
+            if ([NSApp modalWindow] != nil) return e;
+            if ([e window] != [NSApp mainWindow]) return e;
+            if ([e type] == NSEventTypeOtherMouseDown) goMouseButton((int)b);
+            // The release and any drag go too, or the view is left holding a
+            // press it never saw begin.
+            return nil;
+        }];
+    });
+}
+
+void dss_unwatch_mouse_buttons(void) {
+    onMainSync(^{
+        if (gMouseMon == nil) return;
+        [NSEvent removeMonitor:gMouseMon];
+        gMouseMon = nil;
+    });
+}
+
 #pragma mark - Finder actions
 
 char *dss_trash(const char *path, char **out_new_path) {

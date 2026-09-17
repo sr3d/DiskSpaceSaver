@@ -83,6 +83,39 @@ func fireVolumesChanged() {
 	}
 }
 
+var (
+	mouseMu   sync.Mutex
+	mouseHook func(int)
+)
+
+// WatchMouseButtons installs a callback for the fourth and fifth mouse
+// buttons, which are taken out of the event stream rather than passed on to
+// the WebView. The argument is the NSEvent button number: 3 for back, 4 for
+// forward.
+func WatchMouseButtons(fn func(int)) {
+	mouseMu.Lock()
+	mouseHook = fn
+	mouseMu.Unlock()
+	C.dss_watch_mouse_buttons()
+}
+
+// UnwatchMouseButtons puts those buttons back into the event stream.
+func UnwatchMouseButtons() {
+	C.dss_unwatch_mouse_buttons()
+	mouseMu.Lock()
+	mouseHook = nil
+	mouseMu.Unlock()
+}
+
+func fireMouseButton(n int) {
+	mouseMu.Lock()
+	fn := mouseHook
+	mouseMu.Unlock()
+	if fn != nil {
+		go fn(n)
+	}
+}
+
 // Trash moves a path to the user's Trash, returning its new location.
 func Trash(path string) (string, error) {
 	cp := C.CString(path)

@@ -434,7 +434,7 @@ export function ScanView({ scan, palette, dark }: Props) {
             className="icon-btn"
             onClick={back}
             disabled={(tab?.historyAt ?? 0) <= 0}
-            title="Back (⌘[ or the mouse back button)"
+            title="Back (⌘[, Backspace or the mouse back button)"
             aria-label="Back"
           >
             ‹

@@ -203,6 +203,16 @@ kbd {
 .tab-close:hover { color: var(--fg); background: var(--line); }
 .tab-home, .tab-new { width: 28px; justify-content: center; font-size: 15px; }
 
+/* The home button carries the app's icon rather than a house glyph: ⌂ is tiny
+   at text size and drawn differently by every platform's font stack. The icon
+   is a fixed 20px — the one thing in the strip that should not grow with the
+   font — and sits a shade back until pointed at, so it reads as a mark rather
+   than competing with the active tab. */
+.tab-home { width: 32px; padding: 0; }
+.tab-home img { display: block; width: 20px; height: 20px; border-radius: 6px; opacity: 0.88; }
+.tab-home:hover { background: none; }
+.tab-home:hover img { opacity: 1; }
+
 .titlebar-right {
   display: flex; align-items: center; gap: 6px;
   --wails-draggable: no-drag;

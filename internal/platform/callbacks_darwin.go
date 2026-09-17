@@ -10,3 +10,9 @@ import "C"
 //
 //export goVolumesChanged
 func goVolumesChanged() { fireVolumesChanged() }
+
+// goMouseButton is invoked from the event monitor on the main thread with the
+// NSEvent button number. Same contract as above: return at once.
+//
+//export goMouseButton
+func goMouseButton(n C.int) { fireMouseButton(int(n)) }

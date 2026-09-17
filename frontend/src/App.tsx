@@ -231,6 +231,21 @@ export default function App() {
         else acts.trash?.();
         return;
       }
+      // Backspace goes back, as it does in Explorer, and the forward-delete
+      // key does the same — on a Mac keyboard the one key sitting there is
+      // labelled "delete", and either name should reach the same place.
+      //
+      // Bare presses only: ⌘⌫ above is Move to Trash, and that has to stay the
+      // unambiguous one. Held back while a sheet is up, because navigating the
+      // view behind a question the user has not answered yet is never what the
+      // key meant.
+      if ((e.key === 'Backspace' || e.key === 'Delete') && !meta && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        const st = useStore.getState();
+        if (st.confirm || st.showPrefs || st.hiddenSpaceMount) return;
+        acts.back?.();
+        return;
+      }
       if (meta && e.key.toLowerCase() === 'd') {
         e.preventDefault();
         acts.collect?.();
@@ -289,11 +304,16 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // The side buttons on a mouse. They arrive as buttons 3 and 4, and the
-  // default action in a web view is to navigate its own history — which here
-  // would leave the app entirely — so the press is swallowed as well as acted
-  // on. `auxclick` alone is not enough: the navigation is triggered by
-  // mousedown, before any click event exists.
+  // The side buttons on a mouse, as buttons 3 and 4. This is the Windows
+  // path: WebView2 delivers them to the DOM, and the default action there is
+  // to navigate the view's own history — which here would leave the app
+  // entirely — so the press is swallowed as well as acted on. `auxclick` alone
+  // is not enough: the navigation is triggered by mousedown, before any click
+  // event exists.
+  //
+  // On macOS these never arrive. A native event monitor takes them off the
+  // queue first, because what WebKit does with them is not ours to rely on,
+  // and sends back and forward through `menu:command` instead.
   useEffect(() => {
     const swallow = (e: MouseEvent) => {
       if (e.button === 3 || e.button === 4) e.preventDefault();

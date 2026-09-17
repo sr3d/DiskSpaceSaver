@@ -19,3 +19,9 @@ frontend/dist
 *.syso
 /build/windows/installer/wails_tools.nsh
 /build/windows/installer/tmp/
+
+# Compiled output, committed by accident once. Go embeds the absolute path of
+# the machine that built it in every binary, so these also published a local
+# directory layout that has no business in a public repo.
+*.exe
+/mkicon

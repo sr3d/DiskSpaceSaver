@@ -4,6 +4,7 @@ import { ScanSummary } from '../api';
 import { formatBytes } from '../format';
 import { useStore } from '../store';
 import { api } from '../api';
+import appIcon from '../assets/images/appicon.svg';
 
 interface TabsProps {
   scans: ScanSummary[];
@@ -27,8 +28,13 @@ export function TitleBar({ scans, activeID, base2, onSelect, onClose, onNew }: T
     // left inset keeps clear of the traffic lights.
     <div className="titlebar" style={{ '--wails-draggable': 'drag' } as any}>
       <div className="titlebar-inset" />
-      <button className="tab tab-home" onClick={() => setScreen('volumes')} title="All volumes">
-        ⌂
+      <button
+        className="tab tab-home"
+        onClick={() => setScreen('volumes')}
+        title="All volumes"
+        aria-label="All volumes"
+      >
+        <img src={appIcon} alt="" width={20} height={20} />
       </button>
 
       <div className="tabs">
