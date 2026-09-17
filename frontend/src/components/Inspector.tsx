@@ -7,6 +7,7 @@ import {
   Preview as PreviewData,
 } from '../api';
 import { formatBytes, formatCount } from '../format';
+import { useStore } from '../store';
 
 interface Props {
   scanID: string;
@@ -21,6 +22,7 @@ interface Props {
 
 export function Inspector(props: Props) {
   const { scanID, nodeID, base2, files, inline, flags, onQuickLook, onReveal } = props;
+  const caps = useStore((s) => s.caps);
   const [data, setData] = useState<PreviewData | null>(null);
   const [loading, setLoading] = useState(false);
   const seq = useRef(0);
@@ -65,8 +67,8 @@ export function Inspector(props: Props) {
         <button
           className="inspector-image"
           onClick={onQuickLook}
-          title="Open in Quick Look (Space)"
-          aria-label={`Preview of ${data.name}. Open in Quick Look.`}
+          title={caps.preview ? `Open in Quick Look (Space)` : `Open (Space)`}
+          aria-label={`Preview of ${data.name}. ${caps.preview ? "Open in Quick Look." : "Open."}`}
         >
           <img src={data.image} alt="" />
         </button>
@@ -102,7 +104,9 @@ export function Inspector(props: Props) {
         </dl>
 
         {(flags & FLAG_NOPERM) !== 0 && (
-          <p className="inspector-note">Could not be read. Grant Full Disk Access or scan as administrator.</p>
+          <p className="inspector-note">{caps.fullDiskAccess
+              ? 'Could not be read. Grant Full Disk Access or scan as administrator.'
+              : 'Could not be read. Scan as administrator to include it.'}</p>
         )}
         {(flags & FLAG_CLOUD) !== 0 && (
           <p className="inspector-note">Cloud storage — kept online, not using space on this disk.</p>

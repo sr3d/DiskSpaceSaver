@@ -20,6 +20,7 @@ export function TitleBar({ scans, activeID, base2, onSelect, onClose, onNew }: T
   const showCollector = useStore((s) => s.showCollector);
   const setShowPrefs = useStore((s) => s.setShowPrefs);
   const setScreen = useStore((s) => s.setScreen);
+  const mod = useStore((s) => s.caps.modKey);
 
   return (
     // --wails-draggable makes the strip behave as the window's title bar; the
@@ -54,7 +55,7 @@ export function TitleBar({ scans, activeID, base2, onSelect, onClose, onNew }: T
             </button>
           </div>
         ))}
-        <button className="tab tab-new" onClick={onNew} title="New scan (⌘T)">
+        <button className="tab tab-new" onClick={onNew} title={`New scan (${mod}T)`}>
           +
         </button>
       </div>
@@ -63,11 +64,11 @@ export function TitleBar({ scans, activeID, base2, onSelect, onClose, onNew }: T
         <button
           className={'chip' + (collector.count ? ' chip-active' : '') + (showCollector ? ' chip-open' : '')}
           onClick={() => setShowCollector(!showCollector)}
-          title="Collector (⌘L)"
+          title={`Collector (${mod}L)`}
         >
           Collector{collector.count > 0 && <em>{formatBytes(collector.total, base2)}</em>}
         </button>
-        <button className="icon-btn" onClick={() => setShowPrefs(true)} title="Preferences (⌘,)" aria-label="Preferences">
+        <button className="icon-btn" onClick={() => setShowPrefs(true)} title={`Preferences (${mod},)`} aria-label="Preferences">
           ⚙
         </button>
       </div>

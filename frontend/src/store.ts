@@ -6,6 +6,8 @@
 import { create } from 'zustand';
 import {
   api,
+  Caps,
+  DEFAULT_CAPS,
   CollectorState,
   HelperStatus,
   Prefs,
@@ -72,6 +74,8 @@ interface State {
   helper: HelperStatus | null;
   update: UpdateState | null;
   fda: FDAStatus | null;
+  /** What this platform can do. Read once at boot. */
+  caps: Caps;
   toasts: Toast[];
   showPrefs: boolean;
   showCollector: boolean;
@@ -99,6 +103,7 @@ interface State {
   setHelper(h: HelperStatus): void;
   setUpdate(u: UpdateState): void;
   setFDA(f: FDAStatus): void;
+  setCaps(c: Caps): void;
   setTheme(t: 'light' | 'dark'): void;
   setLayout(l: 'wide' | 'medium' | 'narrow'): void;
   toast(kind: Toast['kind'], text: string, detail?: string): void;
@@ -135,6 +140,7 @@ export const useStore = create<State>((set, get) => ({
   helper: null,
   update: null,
   fda: null,
+  caps: DEFAULT_CAPS,
   toasts: [],
   showPrefs: false,
   showCollector: false,
@@ -267,6 +273,7 @@ export const useStore = create<State>((set, get) => ({
   setHelper: (helper) => set({ helper }),
   setUpdate: (update) => set({ update }),
   setFDA: (fda) => set({ fda }),
+  setCaps: (caps) => set({ caps }),
   setTheme: (theme) => set({ theme }),
   setLayout: (layout) => set({ layout }),
 

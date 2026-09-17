@@ -64,12 +64,6 @@ export function formatSnapshotDate(raw: string): string {
   });
 }
 
-// basename without importing a path library.
-export function basename(p: string): string {
-  const i = p.lastIndexOf('/');
-  return i < 0 ? p : p.slice(i + 1) || p;
-}
-
 // middleTruncate keeps both ends of a long path readable.
 export function middleTruncate(s: string, max: number): string {
   if (s.length <= max) return s;

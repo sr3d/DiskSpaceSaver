@@ -239,12 +239,51 @@ export interface CachedScan {
   ageMillis: number;
 }
 
+/**
+ * What this platform can actually do. Several macOS features have no Windows
+ * counterpart, so rather than showing controls that quietly do nothing, the
+ * interface reads this once and leaves them out.
+ */
+export interface Caps {
+  os: 'darwin' | 'windows';
+  preview: boolean;
+  properties: boolean;
+  snapshots: boolean;
+  purgeable: boolean;
+  helper: boolean;
+  helperInstall: boolean;
+  fullDiskAccess: boolean;
+  revealLabel: string;
+  trashLabel: string;
+  trashVerb: string;
+  propertiesLabel: string;
+  modKey: string;
+}
+
+/** Sensible answers before the real ones arrive, and if the call ever fails. */
+export const DEFAULT_CAPS: Caps = {
+  os: 'darwin',
+  preview: true,
+  properties: true,
+  snapshots: true,
+  purgeable: true,
+  helper: true,
+  helperInstall: true,
+  fullDiskAccess: true,
+  revealLabel: 'Show in Finder',
+  trashLabel: 'Trash',
+  trashVerb: 'Move to Trash',
+  propertiesLabel: 'Get Info',
+  modKey: '\u2318',
+};
+
 export interface AppInfo {
   version: string;
   build: string;
   bundled: boolean;
   bundleID: string;
   teamID: string;
+  caps: Caps;
 }
 
 // -1 for depth and minFraction tells Go to use the user's preferences.
@@ -329,6 +368,7 @@ export const api = {
   scanCacheBytes: (): Promise<number> => App.ScanCacheBytes(),
 
   getAppInfo: (): Promise<AppInfo> => App.GetAppInfo() as any,
+  getCapabilities: (): Promise<Caps> => App.GetCapabilities() as any,
 };
 
 // on subscribes to a backend event and returns its unsubscriber. React's

@@ -14,16 +14,17 @@ export function Collector({ base2 }: Props) {
   const askConfirm = useStore((s) => s.askConfirm);
   const toast = useStore((s) => s.toast);
   const allowPermanent = useStore((s) => s.prefs?.allowPermanentDelete ?? false);
+  const caps = useStore((s) => s.caps);
 
   const deleteAll = (permanent: boolean) => {
     askConfirm({
       title: permanent
         ? `Delete ${collector.count} collected items permanently?`
-        : `Move ${collector.count} collected items to the Trash?`,
+        : `${caps.trashVerb} for ${collector.count} collected items?`,
       body: permanent
         ? `This frees ${formatBytes(collector.total, base2)} and bypasses the Trash. There is no way to get these back.`
-        : `This frees ${formatBytes(collector.total, base2)}. You can put items back from the Trash until you empty it.`,
-      confirmLabel: permanent ? 'Delete Permanently' : 'Move to Trash',
+        : `This frees ${formatBytes(collector.total, base2)}. You can put items back from the ${caps.trashLabel} until you empty it.`,
+      confirmLabel: permanent ? 'Delete Permanently' : caps.trashVerb,
       destructive: permanent,
       onConfirm: async () => {
         try {
@@ -53,7 +54,7 @@ export function Collector({ base2 }: Props) {
         <div className="collector-empty">
           <p>Nothing collected yet</p>
           <span>
-            Add items from any scan with <kbd>⌘D</kbd> or the right-click menu. They stay here while you keep
+            Add items from any scan with <kbd>{caps.modKey}D</kbd> or the right-click menu. They stay here while you keep
             looking, across every tab.
           </span>
         </div>
@@ -92,7 +93,7 @@ export function Collector({ base2 }: Props) {
               Clear
             </button>
             <button className="btn btn-danger" onClick={() => deleteAll(false)}>
-              Move All to Trash
+              {`${caps.trashVerb} — All`}
             </button>
             {allowPermanent && (
               <button className="btn btn-danger-outline" onClick={() => deleteAll(true)}>

@@ -13,6 +13,7 @@ export function Preferences() {
   const setUpdate = useStore((s) => s.setUpdate);
   const fda = useStore((s) => s.fda);
   const close = useStore((s) => s.setShowPrefs);
+  const caps = useStore((s) => s.caps);
   const toast = useStore((s) => s.toast);
 
   const [info, setInfo] = useState<AppInfo | null>(null);
@@ -106,8 +107,9 @@ export function Preferences() {
               </select>
             </label>
             <p className="pref-hint">
-              Scales everything, text included. <kbd>⌘=</kbd> and <kbd>⌘-</kbd> change it from
-              anywhere, and <kbd>⌘0</kbd> returns to normal.
+              Scales everything, text included. <kbd>{caps.modKey}=</kbd> and{' '}
+              <kbd>{caps.modKey}-</kbd> change it from anywhere, and <kbd>{caps.modKey}0</kbd>{' '}
+              returns to normal.
             </p>
             <label className="pref-row">
               <span>Sizes</span>
@@ -183,7 +185,7 @@ export function Preferences() {
             <h3>Deleting</h3>
             <label className="pref-check">
               <input type="checkbox" checked={prefs.confirmTrash} onChange={(e) => patch({ confirmTrash: e.target.checked })} />
-              <span>Ask before moving items to the Trash</span>
+              <span>Ask before moving items to the {caps.trashLabel}</span>
             </label>
             <label className="pref-check">
               <input
@@ -194,7 +196,7 @@ export function Preferences() {
               <span>Allow permanent delete</span>
             </label>
             <p className="pref-hint">
-              Permanent delete bypasses the Trash. Nothing can bring those files back, so it stays off until you ask
+              Permanent delete bypasses the {caps.trashLabel}. Nothing can bring those files back, so it stays off until you ask
               for it.
             </p>
           </section>
@@ -289,7 +291,7 @@ export function Preferences() {
               <span>Send anonymous update statistics</span>
             </label>
             <p className="pref-hint">
-              Version, macOS version and processor only, under a random identifier. No file names, no paths, nothing
+              Version, operating system version and processor only, under a random identifier. No file names, no paths, nothing
               that identifies you.
             </p>
             <div className="pref-row">

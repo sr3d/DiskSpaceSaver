@@ -32,6 +32,7 @@ export function ScanView({ scan, palette, dark }: Props) {
   const goForward = useStore((s) => s.goForward);
   const setChecked = useStore((s) => s.setChecked);
   const layoutTier = useStore((s) => s.layout);
+  const caps = useStore((s) => s.caps);
   const collector = useStore((s) => s.collector);
   const toast = useStore((s) => s.toast);
   const askConfirm = useStore((s) => s.askConfirm);
@@ -266,14 +267,14 @@ export function ScanView({ scan, palette, dark }: Props) {
         dropChecks(ids);
         const failed = Object.keys(res.failed ?? {});
         if (res.succeeded?.length) {
-          toast('success', `Moved ${res.succeeded.length} item${res.succeeded.length === 1 ? '' : 's'} to the Trash`,
+          toast('success', `Moved ${res.succeeded.length} item${res.succeeded.length === 1 ? '' : 's'} to the ${caps.trashLabel}`,
             `${formatBytes(res.bytes, base2)} reclaimed`);
         }
         if (failed.length) {
           toast('error', `${failed.length} item${failed.length === 1 ? '' : 's'} could not be moved`,
             res.failed[failed[0]]);
         }
-      }, 'Could not move to the Trash');
+      }, `Could not move to the ${caps.trashLabel}`);
 
     if (prefs?.confirmTrash) {
       const names = ids.map((i) => rows.find((r) => r.id === i)?.name ?? 'item');
@@ -281,12 +282,12 @@ export function ScanView({ scan, palette, dark }: Props) {
       askConfirm({
         title:
           ids.length === 1
-            ? `Move “${names[0]}” to the Trash?`
-            : `Move ${ids.length} items to the Trash?`,
+            ? `${caps.trashVerb}: “${names[0]}”?`
+            : `${caps.trashVerb} for ${ids.length} items?`,
         body:
           (ids.length > 1 ? `${formatBytes(bytes, base2)} in total. ` : '') +
-          'You can put items back from the Trash in Finder until you empty it.',
-        confirmLabel: 'Move to Trash',
+          `You can put items back from the ${caps.trashLabel} until you empty it.`,
+        confirmLabel: caps.trashVerb,
         onConfirm: run,
       });
     } else run();
@@ -303,7 +304,7 @@ export function ScanView({ scan, palette, dark }: Props) {
           : `Delete ${ids.length} items permanently?`,
       body:
         (ids.length > 1 ? `${formatBytes(bytes, base2)} in total. ` : '') +
-        'This bypasses the Trash. There is no way to get these back.',
+        `This bypasses the ${caps.trashLabel}. There is no way to get these back.`,
       confirmLabel: 'Delete Permanently',
       destructive: true,
       onConfirm: () =>
@@ -323,9 +324,9 @@ export function ScanView({ scan, palette, dark }: Props) {
   // Expose the actions to the menu bar and global keyboard handler.
   useEffect(() => {
     const handlers: Record<string, () => void> = {
-      reveal: () => selected && act(() => api.reveal([ref(selected)]), 'Could not show in Finder'),
+      reveal: () => selected && act(() => api.reveal([ref(selected)]), `Could not ${caps.revealLabel.toLowerCase()}`),
       quickLook: () => selected && act(() => api.quickLook([ref(selected)], 0), 'Could not preview'),
-      getInfo: () => selected && act(() => api.getInfo(ref(selected)), 'Could not open Get Info'),
+      getInfo: () => selected && act(() => api.getInfo(ref(selected)), `Could not open ${caps.propertiesLabel}`),
       open: () => selected && act(() => api.openItem(ref(selected)), 'Could not open'),
       copyPath: () =>
         selected &&
@@ -369,9 +370,11 @@ export function ScanView({ scan, palette, dark }: Props) {
     const row = rows.find((r) => r.id === id) ?? null;
     const isDir = row ? row.kind === KIND_DIR || row.kind === KIND_PACKAGE : false;
     return [
-      { label: 'Show in Finder', onClick: () => act(() => api.reveal([ref(id)]), 'Could not show in Finder') },
-      { label: 'Quick Look', onClick: () => act(() => api.quickLook([ref(id)], 0), 'Could not preview') },
-      { label: 'Get Info', onClick: () => act(() => api.getInfo(ref(id)), 'Could not open Get Info') },
+      { label: caps.revealLabel, onClick: () => act(() => api.reveal([ref(id)]), `Could not ${caps.revealLabel.toLowerCase()}`) },
+      ...(caps.preview
+        ? [{ label: 'Quick Look', onClick: () => act(() => api.quickLook([ref(id)], 0), 'Could not preview') } as MenuItem]
+        : []),
+      { label: caps.propertiesLabel, onClick: () => act(() => api.getInfo(ref(id)), `Could not open ${caps.propertiesLabel}`) },
       { label: 'Open', onClick: () => act(() => api.openItem(ref(id)), 'Could not open') },
       { separator: true },
       {
@@ -396,7 +399,7 @@ export function ScanView({ scan, palette, dark }: Props) {
             'Could not update the collector',
           ),
       },
-      { label: 'Move to Trash', onClick: () => doTrash([id]), destructive: true },
+      { label: caps.trashVerb, onClick: () => doTrash([id]), destructive: true },
       ...(prefs?.allowPermanentDelete
         ? [{ label: 'Delete Permanently…', onClick: () => doDeleteForever([id]), destructive: true } as MenuItem]
         : []),
@@ -419,7 +422,7 @@ export function ScanView({ scan, palette, dark }: Props) {
       flags={selectedRowFlags}
       inline={inspectorInline}
       onQuickLook={() => selected && act(() => api.quickLook([ref(selected)], 0), 'Could not preview')}
-      onReveal={() => selected && act(() => api.reveal([ref(selected)]), 'Could not show in Finder')}
+      onReveal={() => selected && act(() => api.reveal([ref(selected)]), `Could not ${caps.revealLabel.toLowerCase()}`)}
     />
   );
 
@@ -468,7 +471,7 @@ export function ScanView({ scan, palette, dark }: Props) {
                 <span className="scan-cached">saved scan · {formatAge(Date.now() - scan.cachedAt)}</span>
               )}
               {scan.inaccessible > 0 && (
-                <span className="scan-warn" title="Grant Full Disk Access or scan as administrator">
+                <span className="scan-warn" title={caps.fullDiskAccess ? "Grant Full Disk Access or scan as administrator" : "Scan as administrator to include these"}>
                   {formatCount(scan.inaccessible)} unreadable
                 </span>
               )}

@@ -174,6 +174,38 @@ app signature, the helper signature and the daemon plist all agree.
   packaged app, not in a browser, so they are unverified beyond compiling and
   launching.
 
+## Windows
+
+`make windows` cross-compiles amd64 and arm64 into `dist/windows/`. No Windows
+host and no cgo toolchain are needed: Wails compiles its Windows backend as
+pure Go and so does `internal/platform`, which is why that constraint is worth
+keeping.
+
+What differs, and why:
+
+| | macOS | Windows |
+|---|---|---|
+| Delete | Trash | Recycle Bin (`SHFileOperation` with ALLOWUNDO) |
+| Reveal | Show in Finder | Show in Explorer |
+| File info | Get Info | Properties |
+| Preview | Quick Look panel | none — Space opens the file; the thumbnail panel still works |
+| Thumbnails | `QLThumbnailGenerator` | `IShellItemImageFactory` |
+| Allocated size | `st_blocks * 512` | `GetCompressedFileSize` |
+| Cloud files | `SF_DATALESS` | `RECALL_ON_DATA_ACCESS` / `RECALL_ON_OPEN` / `OFFLINE` |
+| Snapshots | Time Machine | not yet — VSS is a later feature |
+| Purgeable space | reported | no equivalent |
+| Full Disk Access | a grant the user gives | no equivalent; elevation instead |
+
+The interface is built from a capability set the platform declares, rather than
+from stubs. A feature that does not exist on a platform is absent, not a button
+that quietly does nothing — and the wording follows too, so Windows says
+"Recycle Bin" and `Ctrl+`.
+
+**Not done yet:** the elevated helper (`cmd/helper` is the one package that
+still does not build for Windows), the installer, Authenticode signing, and
+auto-update. Nothing in the Windows build has been run — only compiled and
+unit-tested. See `docs/WINDOWS.md`.
+
 ## Licence
 
 Not yet chosen.

@@ -23,31 +23,48 @@ export default function App() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      try {
-        const [volumes, p, scans, tray, helper, update, fda] = await Promise.all([
-          api.listVolumes(),
-          api.getPrefs(),
-          api.listScans(),
-          api.collectorList(),
-          api.getHelperStatus(),
-          api.getUpdateState(),
-          api.checkFullDiskAccess(),
-        ]);
-        if (!alive) return;
-        s.setVolumes(volumes);
-        s.setPrefs(p);
-        s.setScans(scans);
-        s.setCollector(tray);
-        s.setHelper(helper);
-        s.setUpdate(update);
-        s.setFDA(fda);
-        s.setTheme(resolveTheme(p.theme));
-        if (scans.length > 0) s.setActiveScan(scans[scans.length - 1].id);
-        s.setReady(true);
-      } catch (err) {
-        reportError('DiskSpaceSaver could not start up cleanly', err);
-        s.setReady(true);
+      // allSettled, not all: getHelperStatus and checkFullAccess are the two
+      // platform-specific calls here, and a rejection from either used to take
+      // volumes, preferences, scans, the collector and the theme down with it,
+      // leaving an app that looked broken for a reason that did not matter.
+      const [volumes, p, scans, tray, helper, update, fda, caps] = await Promise.allSettled([
+        api.listVolumes(),
+        api.getPrefs(),
+        api.listScans(),
+        api.collectorList(),
+        api.getHelperStatus(),
+        api.getUpdateState(),
+        api.checkFullDiskAccess(),
+        api.getCapabilities(),
+      ]);
+      if (!alive) return;
+
+      const take = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
+        r.status === 'fulfilled' ? r.value : fallback;
+
+      if (caps.status === 'fulfilled') s.setCaps(caps.value);
+      if (volumes.status === 'fulfilled') s.setVolumes(volumes.value);
+      if (tray.status === 'fulfilled') s.setCollector(tray.value);
+      if (helper.status === 'fulfilled') s.setHelper(helper.value);
+      if (update.status === 'fulfilled') s.setUpdate(update.value);
+      if (fda.status === 'fulfilled') s.setFDA(fda.value);
+
+      if (p.status === 'fulfilled') {
+        s.setPrefs(p.value);
+        s.setTheme(resolveTheme(p.value.theme));
+      } else {
+        reportError('Could not read your preferences', p.reason);
       }
+
+      const list = take(scans, []);
+      s.setScans(list);
+      if (list.length > 0) s.setActiveScan(list[list.length - 1].id);
+
+      // Only the things the app cannot work without are worth a message.
+      if (volumes.status === 'rejected') {
+        reportError('Could not list your drives', volumes.reason);
+      }
+      s.setReady(true);
     })();
     return () => {
       alive = false;
@@ -98,6 +115,10 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = s.theme;
   }, [s.theme]);
+
+  useEffect(() => {
+    document.documentElement.dataset.os = s.caps.os;
+  }, [s.caps.os]);
 
   // Interface zoom. CSS `zoom` scales layout rather than painting over it, so
   // text stays sharp and everything reflows at the new size — unlike a
@@ -242,6 +263,26 @@ export default function App() {
       if (meta && e.key === ']') {
         e.preventDefault();
         acts.forward?.();
+        return;
+      }
+      // Windows spells back and forward as Alt with the arrow keys, and delete
+      // without a modifier. Both sets are bound everywhere rather than being
+      // switched on the platform: an extra binding costs nothing, and people
+      // who move between the two do not have to relearn.
+      if (e.altKey && !meta && e.key === 'ArrowLeft') {
+        e.preventDefault();
+        acts.back?.();
+        return;
+      }
+      if (e.altKey && !meta && e.key === 'ArrowRight') {
+        e.preventDefault();
+        acts.forward?.();
+        return;
+      }
+      if (!meta && !e.altKey && e.key === 'Delete') {
+        e.preventDefault();
+        if (e.shiftKey) acts.deleteForever?.();
+        else acts.trash?.();
       }
     };
     window.addEventListener('keydown', onKey);

@@ -69,7 +69,8 @@ html, body, #root {
 }
 
 body {
-  font: 13px/1.45 -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  font: 13px/1.45 -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text',
+    'Segoe UI', 'Helvetica Neue', sans-serif;
   color: var(--fg);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
@@ -148,6 +149,16 @@ kbd {
    otherwise the tabs collide with them when the interface is made smaller, and
    drift far from them when it is made larger. */
 .titlebar-inset { width: calc(78px / var(--ui-scale)); flex: none; }
+
+/* Windows keeps its own title bar with its own caption buttons, so the tab
+   strip is an ordinary toolbar underneath it: nothing overlays it, nothing
+   needs a gap, and it must not act as a drag region. */
+[data-os='windows'] .titlebar-inset { display: none; }
+[data-os='windows'] .titlebar {
+  --wails-draggable: no-drag;
+  min-height: 0;
+  padding-left: 8px;
+}
 
 .tabs {
   flex: 1;

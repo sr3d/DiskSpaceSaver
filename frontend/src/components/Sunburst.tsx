@@ -393,28 +393,30 @@ function drawCentre(
 
   if (roomy) {
     ctx.fillStyle = dim;
-    ctx.font = `500 ${smallSize}px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif`;
+    ctx.font = `500 ${smallSize}px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif`;
     const pathText = hov ? hov.label : lay.focusLabel;
     if (pathText) fitText(ctx, dirname(pathText), geo.cx, geo.cy - geo.r0 * 0.46, maxW);
   }
 
   ctx.fillStyle = fg;
-  ctx.font = `600 ${titleSize}px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif`;
+  ctx.font = `600 ${titleSize}px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif`;
   fitText(ctx, title, geo.cx, geo.cy - geo.r0 * 0.18, maxW);
 
-  ctx.font = `700 ${valueSize}px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif`;
+  ctx.font = `700 ${valueSize}px -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif`;
   ctx.fillText(formatBytes(bytes, base2), geo.cx, geo.cy + geo.r0 * 0.14);
 
   if (roomy) {
     ctx.fillStyle = dim;
-    ctx.font = `400 ${smallSize}px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif`;
+    ctx.font = `400 ${smallSize}px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif`;
     const tail = [sub, share].filter(Boolean).join(' · ');
     if (tail) fitText(ctx, tail, geo.cx, geo.cy + geo.r0 * 0.48, maxW);
   }
 }
 
+// Either separator: the label is built with the platform's, but a path echoed
+// back from elsewhere may carry the other.
 function dirname(p: string): string {
-  const i = p.lastIndexOf('/');
+  const i = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
   return i <= 0 ? '' : p.slice(0, i);
 }
 

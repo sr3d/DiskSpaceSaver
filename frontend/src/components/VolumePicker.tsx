@@ -1,6 +1,7 @@
 // The opening screen: every mounted volume with its capacity bar.
 import { useEffect, useState } from 'react';
 import { api, CachedScan, Volume } from '../api';
+import { useStore } from '../store';
 import { formatAge, formatBytes } from '../format';
 
 interface Props {
@@ -18,6 +19,7 @@ interface Props {
 
 export function VolumePicker(props: Props) {
   const { volumes, base2, helperAvailable, onScan, onOpenCached, onChooseFolder, onHiddenSpace } = props;
+  const caps = useStore((s) => s.caps);
   const [cached, setCached] = useState<Record<string, CachedScan | null>>({});
   // Which card is working, and at what. Keyed by path so one busy volume does
   // not disable the others.
@@ -67,7 +69,7 @@ export function VolumePicker(props: Props) {
       <div className="volume-grid">
         {volumes.map((v) => {
           const usedFrac = v.total > 0 ? v.used / v.total : 0;
-          const purgeFrac = v.total > 0 ? v.purgeable / v.total : 0;
+          const purgeFrac = caps.purgeable && v.total > 0 ? v.purgeable / v.total : 0;
           const c = cached[v.path];
           return (
             <div key={v.path + v.uuid} className="volume-card">
@@ -102,7 +104,7 @@ export function VolumePicker(props: Props) {
               </div>
               <div className="capacity-text">
                 <strong>{formatBytes(v.free, base2)}</strong> free of {formatBytes(v.total, base2)}
-                {v.purgeable > 0 && (
+                {caps.purgeable && v.purgeable > 0 && (
                   <span className="capacity-purge-text"> · {formatBytes(v.purgeable, base2)} purgeable</span>
                 )}
               </div>

@@ -42,6 +42,41 @@ jobs:
           npx tsc --noEmit
           npm run build
 
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.25', cache: true }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.13.0
+
+      - name: Vet
+        run: go vet ./...
+
+      # Runs the platform capability tests against the Windows implementation,
+      # which is the half that cannot be exercised on a macOS runner.
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        run: |
+          cd frontend && npm ci && npm run build && cd ..
+          wails build -platform windows/amd64 -skipbindings -trimpath
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DiskSpaceSaver-windows-unsigned
+          path: build/bin/*.exe
+          retention-days: 7
+
   build:
     name: Build app
     runs-on: macos-14

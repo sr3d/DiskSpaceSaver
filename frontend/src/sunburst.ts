@@ -55,10 +55,13 @@ export function layout(slice: ViewportSlice, rootLabel: string): Layout {
   // Tolerate a payload whose optional collections are missing: an empty scan,
   // an older backend, or a focus at the root all produce one.
   const ancestors = slice.ancestors ?? [];
+  // Joined with the platform's separator so the readout matches the paths the
+  // user sees everywhere else.
+  const sep = navigator.userAgent.includes('Windows') ? '\\' : '/';
   const focusLabel = [rootLabel, ...ancestors.slice(1).map((a) => a.name), slice.focus.name]
     .filter(Boolean)
     .slice(1)
-    .join('/');
+    .join(sep);
 
   function walk(
     node: VNode,

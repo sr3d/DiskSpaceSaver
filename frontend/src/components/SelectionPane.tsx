@@ -8,6 +8,7 @@
 import { KIND_DIR, KIND_PACKAGE, NodeSummary } from '../api';
 import { arcColor, Palette } from '../colors';
 import { formatBytes, formatCount } from '../format';
+import { useStore } from '../store';
 
 interface Props {
   rows: NodeSummary[];
@@ -33,6 +34,7 @@ interface Props {
 }
 
 export function SelectionPane(props: Props) {
+  const mod = useStore((s) => s.caps.modKey);
   const {
     rows, indexOf, bytes, where, base2, palette, dark, allowPermanent, hovered,
     onHover, onSelect, onContextMenu, onRemove, onCollect, onTrash,
@@ -104,7 +106,7 @@ export function SelectionPane(props: Props) {
         <button className="btn btn-quiet" onClick={onClear} title="Untick everything">
           Clear
         </button>
-        <button className="btn btn-quiet" onClick={onCollect} title="Add these to the collector (⌘D)">
+        <button className="btn btn-quiet" onClick={onCollect} title={`Add these to the collector (${mod}D)`}>
           Collect
         </button>
         <button className="btn btn-danger" onClick={onTrash}>
