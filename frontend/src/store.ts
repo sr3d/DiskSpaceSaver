@@ -42,7 +42,16 @@ export interface TabState {
    */
   history: number[];
   historyAt: number;
-  /** Rows ticked for a bulk action. Cleared whenever the folder changes. */
+  /**
+   * Rows ticked for a bulk action, by node handle. Kept across navigation:
+   * the point of the selection pane is to gather things from several folders
+   * before acting on them, so walking into a folder to find the next candidate
+   * must not throw away what is already ticked.
+   *
+   * The safety property this used to give — "a bulk delete can only act on
+   * rows you can see" — is replaced by the pane itself, which lists every
+   * ticked item with its full path, so the deletion is still reviewable.
+   */
   checked: Set<number>;
   /** Anchor for shift-click range selection. */
   lastChecked: number;
@@ -206,9 +215,11 @@ export const useStore = create<State>((set, get) => ({
             selected: 0,
             hovered: 0,
             loading: true,
-            checked: new Set<number>(),
+            // checked and selectionOpen deliberately survive: see TabState.
+            // lastChecked is the shift-click anchor, which is an index into
+            // the rows on screen, so it does not mean anything in a new
+            // folder and would extend a range across two unrelated lists.
             lastChecked: 0,
-            selectionOpen: false,
             history: trimmed,
             historyAt: trimmed.length - 1,
           },
@@ -237,7 +248,7 @@ export const useStore = create<State>((set, get) => ({
         [id]: {
           ...tab, focus: tab.history[at], historyAt: at,
           selected: 0, hovered: 0, loading: true,
-          checked: new Set<number>(), lastChecked: 0, selectionOpen: false,
+          lastChecked: 0,
         },
       },
     }));
@@ -254,7 +265,7 @@ export const useStore = create<State>((set, get) => ({
         [id]: {
           ...tab, focus: tab.history[at], historyAt: at,
           selected: 0, hovered: 0, loading: true,
-          checked: new Set<number>(), lastChecked: 0, selectionOpen: false,
+          lastChecked: 0,
         },
       },
     }));

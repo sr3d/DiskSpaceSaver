@@ -311,6 +311,38 @@ export namespace main {
 	        this.bytes = source["bytes"];
 	    }
 	}
+	export class SelectedItem {
+	    scanID: string;
+	    nodeID: number;
+	    name: string;
+	    path: string;
+	    size: number;
+	    kind: number;
+	    flags: number;
+	    files: number;
+	    gone: boolean;
+	    covered: boolean;
+	    err?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SelectedItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.scanID = source["scanID"];
+	        this.nodeID = source["nodeID"];
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.size = source["size"];
+	        this.kind = source["kind"];
+	        this.flags = source["flags"];
+	        this.files = source["files"];
+	        this.gone = source["gone"];
+	        this.covered = source["covered"];
+	        this.err = source["err"];
+	    }
+	}
 
 }
 
@@ -433,6 +465,7 @@ export namespace prefs {
 	    uiScale: number;
 	    minItemSize: number;
 	    sidebarWidth: number;
+	    selectionWidth: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Prefs(source);
@@ -459,6 +492,7 @@ export namespace prefs {
 	        this.uiScale = source["uiScale"];
 	        this.minItemSize = source["minItemSize"];
 	        this.sidebarWidth = source["sidebarWidth"];
+	        this.selectionWidth = source["selectionWidth"];
 	    }
 	}
 

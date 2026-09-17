@@ -100,6 +100,99 @@ func (a *App) paths(refs []ItemRef) ([]string, Result) {
 	return out, res
 }
 
+// ---------------------------------------------------------------- selection
+
+// SelectedItem describes one ticked row for the selection pane.
+//
+// The pane used to be handed rows filtered out of the visible list, which is
+// why the selection could not outlive a change of folder: an item in another
+// folder had no name, size or path to show. Ticks now survive navigation, so
+// the pane has to be able to describe an item wherever it came from.
+type SelectedItem struct {
+	ScanID string `json:"scanID"`
+	NodeID uint32 `json:"nodeID"`
+	Name   string `json:"name"`
+	Path   string `json:"path"`
+	Size   int64  `json:"size"`
+	Kind   uint8  `json:"kind"`
+	Flags  uint8  `json:"flags"`
+	Files  int32  `json:"files"`
+	// Gone is set for a handle the tree no longer has — deleted from under us,
+	// or pruned by a rescan. Reported rather than dropped, because a row that
+	// silently disappears from the pane looks like the app losing the tick.
+	Gone bool `json:"gone"`
+	// Covered is set for an item inside another selected item. Its bytes are
+	// already counted in that ancestor, so counting them again would overstate
+	// what deleting the selection frees.
+	Covered bool   `json:"covered"`
+	Err     string `json:"err,omitempty"`
+}
+
+// DescribeItems resolves ticked handles into something the pane can show.
+//
+// Order is the caller's order, and every ref gets exactly one entry, so the
+// frontend can line the result up against its own set without matching on
+// anything but position.
+func (a *App) DescribeItems(refs []ItemRef) ([]SelectedItem, error) {
+	out := make([]SelectedItem, 0, len(refs))
+	for _, r := range refs {
+		it := SelectedItem{ScanID: r.ScanID, NodeID: r.NodeID}
+		s, ok := a.scans.Get(r.ScanID)
+		if !ok {
+			it.Gone, it.Err = true, "that scan is closed"
+			out = append(out, it)
+			continue
+		}
+		n, ok := s.Tree.Snapshot(r.NodeID)
+		if !ok || n.Flags&tree.FlagDeleted != 0 {
+			it.Gone, it.Err = true, "no longer in the scan"
+			out = append(out, it)
+			continue
+		}
+		it.Name, it.Size, it.Kind, it.Flags, it.Files = n.Name, n.Alloc, n.Kind, n.Flags, n.Files
+		it.Path = s.Tree.Path(r.NodeID)
+		out = append(out, it)
+	}
+
+	// The same rule the collector uses, so the two agree about what a
+	// selection is worth: a child whose parent is also selected contributes
+	// nothing of its own.
+	for i := range out {
+		if out[i].Gone || out[i].Path == "" {
+			continue
+		}
+		for j := range out {
+			if i == j || out[j].Gone || out[j].ScanID != out[i].ScanID {
+				continue
+			}
+			if pathContains(out[j].Path, out[i].Path) {
+				out[i].Covered = true
+				break
+			}
+		}
+	}
+	return out, nil
+}
+
+// pathContains reports whether child sits strictly inside parent. It is
+// collector.isAncestor's rule, which exists so that "/v/about.txt" is not
+// mistaken for a child of "/v/a" — a prefix test alone would drop the sibling.
+func pathContains(parent, child string) bool {
+	if parent == "" || parent == child || len(child) <= len(parent) {
+		return false
+	}
+	if child[:len(parent)] != parent {
+		return false
+	}
+	// A volume root ("/", or "C:\\") already ends in its separator, so there is
+	// no second one to find at the boundary; requiring one would say nothing on
+	// the disk is inside it.
+	if os.IsPathSeparator(parent[len(parent)-1]) {
+		return true
+	}
+	return os.IsPathSeparator(child[len(parent)])
+}
+
 // ---------------------------------------------------------------- reveal etc
 
 // RevealInFinder selects the items in Finder.

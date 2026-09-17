@@ -1,8 +1,8 @@
 // One scan tab: chart, sidebar, breadcrumbs and the actions over them.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  api, ItemRef, NodeSummary, ScanSummary, SubProgress, ViewportSlice, PREF_DEFAULT,
-  KIND_DIR, KIND_PACKAGE,
+  api, ItemRef, NodeSummary, ScanSummary, SelectedItem, SubProgress, ViewportSlice,
+  PREF_DEFAULT, KIND_DIR, KIND_PACKAGE,
 } from '../api';
 import { Palette } from '../colors';
 import { formatAge, formatBytes, formatCount, middleTruncate } from '../format';
@@ -14,6 +14,7 @@ import { Inspector } from './Inspector';
 import { SizeFilter } from './SizeFilter';
 import { SidebarColumn } from './SidebarColumn';
 import { SelectionPane } from './SelectionPane';
+import { SelectionColumn } from './SelectionColumn';
 import { Sunburst } from './Sunburst';
 import { ContextMenu, MenuItem } from './ContextMenu';
 import { ProgressBar } from './ProgressBar';
@@ -159,11 +160,42 @@ export function ScanView({ scan, palette, dark }: Props) {
 
   // ---- bulk selection ----------------------------------------------------
   const checked = tab?.checked ?? new Set<number>();
-  // Ticks are kept only for rows still on screen: the size filter or a rescan
-  // can remove a row, and acting on something the user can no longer see is
-  // exactly the wrong behaviour for a delete.
-  const checkedRows = rows.filter((r) => checked.has(r.id));
-  const checkedBytes = checkedRows.reduce((a, r) => a + r.size, 0);
+
+  // Ticks outlive the folder they were made in, so the selection cannot be
+  // read off the visible rows any more — an item two folders back has no row
+  // here at all. Go describes them instead, which is also what gives each one
+  // the full path that makes a bulk delete reviewable.
+  const [selItems, setSelItems] = useState<SelectedItem[]>([]);
+  const checkedIDs = useMemo(
+    () => [...checked].sort((a, b) => a - b),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [checked],
+  );
+  const checkedKey = checkedIDs.join(',');
+  useEffect(() => {
+    if (checkedIDs.length === 0) {
+      setSelItems([]);
+      return;
+    }
+    let alive = true;
+    api
+      .describeItems(checkedIDs.map((id) => ({ scanID: scan.id, nodeID: id })))
+      .then((d) => alive && setSelItems(d ?? []))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // `rows` is in here so a delete or a rescan re-describes: an item that has
+    // gone is shown as gone rather than silently keeping its old size.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkedKey, scan.id, rows]);
+
+  // What the selection is actually worth. A child whose parent is also ticked
+  // contributes nothing — its bytes are inside the parent's — and an item that
+  // has gone contributes nothing either.
+  const selLive = selItems.filter((i) => !i.gone && !i.covered);
+  const checkedBytes = selLive.reduce((a, i) => a + i.size, 0);
+  const selFolders = new Set(selItems.filter((i) => !i.gone).map((i) => parentOf(i.path))).size;
 
   const toggleCheck = (id: number, shiftKey: boolean) => {
     const next = new Set(checked);
@@ -209,14 +241,12 @@ export function ScanView({ scan, palette, dark }: Props) {
 
   const collectChecked = () =>
     act(async () => {
-      await api.collectorAdd(checkedRows.map((r) => ref(r.id)));
+      await api.collectorAdd(selLive.map((i) => ref(i.nodeID)));
       clearChecks();
     }, 'Could not collect those items');
 
-  // The pane is only ever shown for ticks that still exist, so unticking the
-  // last row or walking to another folder puts it away without anything here
-  // having to remember to close it.
-  const selectionOpen = (tab?.selectionOpen ?? false) && checkedRows.length > 0;
+  // The pane is shown for as long as anything is ticked, wherever it lives.
+  const selectionOpen = (tab?.selectionOpen ?? false) && checked.size > 0;
 
   // Opens the pane on the first tick, and puts the flag back when the last one
   // goes — deleting, collecting or unticking all empty the selection without
@@ -235,19 +265,35 @@ export function ScanView({ scan, palette, dark }: Props) {
     const was = prevTicks.current;
     prevTicks.current = tickCount;
     if (tickCount > 0 && was === 0) patchTab(scan.id, { selectionOpen: true });
-    else if (checkedRows.length === 0 && (tab?.selectionOpen ?? false)) {
+    else if (tickCount === 0 && (tab?.selectionOpen ?? false)) {
       patchTab(scan.id, { selectionOpen: false });
     }
-  }, [tickCount, checkedRows.length, tab?.selectionOpen, scan.id, patchTab]);
+  }, [tickCount, tab?.selectionOpen, scan.id, patchTab]);
 
-  /** What a delete or collect should act on: the ticked rows, or the selection. */
+  /**
+   * What a delete or collect should act on: everything ticked, or the
+   * highlighted row when nothing is. Covered items are left out — deleting the
+   * folder they sit in takes them with it, and asking for both would report a
+   * spurious failure for the child that vanished under us.
+   */
   const bulkTargets = () =>
-    checkedRows.length > 0 ? checkedRows.map((r) => r.id) : selected ? [selected] : [];
+    checked.size > 0 ? selLive.map((i) => i.nodeID) : selected ? [selected] : [];
 
   const navigate = (id: number) => {
     if (!id) return;
     navigateTo(scan.id, id);
   };
+
+  // Walks to where an item lives and highlights it there. A selected item may
+  // be two folders away, and highlighting a handle the current list has no row
+  // for would look like the click did nothing.
+  const revealNode = (id: number) =>
+    act(async () => {
+      const line = await api.getAncestors(scan.id, id);
+      const parent = line?.[line.length - 1];
+      if (parent && parent.id !== (tab?.focus ?? 1)) navigateTo(scan.id, parent.id);
+      patchTab(scan.id, { selected: id });
+    }, 'Could not go to that item');
 
   // Up one level, which is a different thing from going back: it walks the
   // tree, not the trail.
@@ -272,6 +318,15 @@ export function ScanView({ scan, palette, dark }: Props) {
     }
   };
 
+  // A confirmation has to name what it is about to delete, and the thing
+  // being deleted may well not be on screen any more. The described selection
+  // knows about those; the visible rows cover the case of acting on a
+  // highlighted row that was never ticked.
+  const nameOf = (id: number) =>
+    selItems.find((i) => i.nodeID === id)?.name ?? rows.find((r) => r.id === id)?.name ?? 'item';
+  const sizeOf = (id: number) =>
+    selItems.find((i) => i.nodeID === id)?.size ?? rows.find((r) => r.id === id)?.size ?? 0;
+
   const doTrash = (ids: number[]) => {
     if (ids.length === 0) return;
     const run = () =>
@@ -290,8 +345,8 @@ export function ScanView({ scan, palette, dark }: Props) {
       }, `Could not move to the ${caps.trashLabel}`);
 
     if (prefs?.confirmTrash) {
-      const names = ids.map((i) => rows.find((r) => r.id === i)?.name ?? 'item');
-      const bytes = ids.reduce((a, i) => a + (rows.find((r) => r.id === i)?.size ?? 0), 0);
+      const names = ids.map((i) => nameOf(i));
+      const bytes = ids.reduce((a, i) => a + sizeOf(i), 0);
       askConfirm({
         title:
           ids.length === 1
@@ -308,8 +363,8 @@ export function ScanView({ scan, palette, dark }: Props) {
 
   const doDeleteForever = (ids: number[]) => {
     if (ids.length === 0) return;
-    const names = ids.map((i) => rows.find((r) => r.id === i)?.name ?? 'item');
-    const bytes = ids.reduce((a, i) => a + (rows.find((r) => r.id === i)?.size ?? 0), 0);
+    const names = ids.map((i) => nameOf(i));
+    const bytes = ids.reduce((a, i) => a + sizeOf(i), 0);
     askConfirm({
       title:
         ids.length === 1
@@ -568,29 +623,41 @@ export function ScanView({ scan, palette, dark }: Props) {
           onContextMenu={(id, x, y) => setMenu({ x, y, id })}
           />
         </SidebarColumn>
-        {!inspectorInline && inspector}
-
-        {selectionOpen && (
-          <SelectionPane
-            rows={checkedRows}
-            indexOf={(id) => rows.findIndex((r) => r.id === id)}
-            bytes={checkedBytes}
-            where={trail[trail.length - 1]?.name ?? scan.label}
-            base2={base2}
-            palette={palette}
-            dark={dark}
-            allowPermanent={prefs?.allowPermanentDelete ?? false}
-            hovered={tab?.hovered ?? 0}
-            onHover={(id) => patchTab(scan.id, { hovered: id })}
-            onSelect={(id) => patchTab(scan.id, { selected: id })}
-            onContextMenu={(id, x, y) => setMenu({ x, y, id })}
-            onRemove={uncheck}
-            onCollect={collectChecked}
-            onTrash={() => doTrash(checkedRows.map((r) => r.id))}
-            onDeleteForever={() => doDeleteForever(checkedRows.map((r) => r.id))}
-            onClear={clearChecks}
-            onClose={() => patchTab(scan.id, { selectionOpen: false })}
-          />
+        {/* The third column: the inspector, the selection, or both stacked.
+            Three columns and not four — the chart is what the app is for, and
+            a fourth would come out of its width. */}
+        {(selectionOpen || !inspectorInline) && (
+          <SelectionColumn uiScale={uiScale}>
+            {!inspectorInline && inspector}
+            {selectionOpen && (
+              <SelectionPane
+                items={selItems}
+                indexOf={(id) => rows.findIndex((r) => r.id === id)}
+                bytes={checkedBytes}
+                folders={selFolders}
+                base2={base2}
+                palette={palette}
+                dark={dark}
+                allowPermanent={prefs?.allowPermanentDelete ?? false}
+                hovered={tab?.hovered ?? 0}
+                onHover={(id) => patchTab(scan.id, { hovered: id })}
+                // Clicking an item from another folder should take the user
+                // to it, not just highlight a handle the current list has no
+                // row for.
+                onSelect={(it) => {
+                  patchTab(scan.id, { selected: it.nodeID });
+                  if (!rows.some((r) => r.id === it.nodeID)) revealNode(it.nodeID);
+                }}
+                onContextMenu={(id, x, y) => setMenu({ x, y, id })}
+                onRemove={uncheck}
+                onCollect={collectChecked}
+                onTrash={() => doTrash(bulkTargets())}
+                onDeleteForever={() => doDeleteForever(bulkTargets())}
+                onClear={clearChecks}
+                onClose={() => patchTab(scan.id, { selectionOpen: false })}
+              />
+            )}
+          </SelectionColumn>
         )}
       </div>
 
@@ -602,7 +669,7 @@ export function ScanView({ scan, palette, dark }: Props) {
           )}
         </span>
         {busy && <span className="foot-busy">working…</span>}
-        {checkedRows.length > 0 && (
+        {checked.size > 0 && (
           <div className="foot-sel">
             <button
               className={'sel-chip' + (selectionOpen ? ' sel-chip-on' : '')}
@@ -610,7 +677,7 @@ export function ScanView({ scan, palette, dark }: Props) {
               aria-expanded={selectionOpen}
               title={selectionOpen ? 'Hide the selected items' : 'Show the selected items again'}
             >
-              <strong>{formatCount(checkedRows.length)}</strong> selected ·{' '}
+              <strong>{formatCount(checked.size)}</strong> selected ·{' '}
               {formatBytes(checkedBytes, base2)}
             </button>
             <button
@@ -641,3 +708,9 @@ export function ScanView({ scan, palette, dark }: Props) {
 // onEvent is a local import shim so this file does not reach into runtime
 // directly; it keeps the subscribe/unsubscribe contract in one place.
 import { on as onEvent } from '../api';
+
+// The folder an item sits in, used only to count how many the selection spans.
+function parentOf(path: string): string {
+  const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+  return cut > 0 ? path.slice(0, cut) : path;
+}

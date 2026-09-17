@@ -101,6 +101,13 @@ func isAncestor(parent, child string) bool {
 	if child[:len(parent)] != parent {
 		return false
 	}
+	// A volume root ("/", or "C:\\") already ends in its separator, so there is
+	// no second one to find at the boundary; requiring one would say nothing on
+	// the disk is inside it, and collecting a whole volume would stop
+	// subsuming the items already taken from it.
+	if isSeparator(parent[len(parent)-1]) {
+		return true
+	}
 	return isSeparator(child[len(parent)])
 }
 

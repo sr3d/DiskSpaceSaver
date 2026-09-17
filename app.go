@@ -367,7 +367,7 @@ func (a *App) expectedBytesFor(root, uuid string, asAdmin bool) int64 {
 			// An administrator scan reaches trees an ordinary one cannot, so
 			// its total is not a valid expectation for an ordinary scan of the
 			// same root, nor the other way round.
-			if meta.Bytes > 0 && meta.AsAdmin == asAdmin {
+			if meta.Vouched && meta.Bytes > 0 && meta.AsAdmin == asAdmin {
 				return meta.Bytes
 			}
 		}
@@ -383,12 +383,19 @@ func (a *App) expectedBytesFor(root, uuid string, asAdmin bool) int64 {
 	}
 	for _, v := range vols {
 		if v.Path == root || (v.IsRoot && (root == "/" || root == "/System/Volumes/Data")) {
-			// Deliberately not minus purgeable space. A scan cannot reach this
-			// figure anyway — it also covers snapshots, clone sharing and
-			// trees we were refused — and undershooting means the bar climbs
-			// to near full and then completes, which is the right direction to
-			// be wrong in.
-			return v.Used
+			// Used plus purgeable, not Used alone. Used is Finder's figure,
+			// and Finder counts purgeable space as available, so it is short
+			// by whatever the system currently thinks it could evict — 32 GB
+			// on this machine, but that number moves. A walk finds purgeable
+			// files like any others, so the sum, which is just "the bytes that
+			// are not free", is the quantity a walk is trying to reach.
+			//
+			// It is still an overshoot, which is the right direction to be
+			// wrong in: it also covers snapshots, clone sharing and trees we
+			// are refused, none of which a walk can reach. Measured here,
+			// 826.7 GB against a full scan's 758.5 GB — the bar climbs into
+			// the nineties and then completes.
+			return v.Used + v.Purgeable
 		}
 	}
 	return 0
@@ -563,6 +570,13 @@ func (a *App) SetMinItemSize(bytes int64) (prefs.Prefs, error) {
 func (a *App) SetSidebarWidth(width int) (prefs.Prefs, error) {
 	p := a.prefs.Get()
 	p.SidebarWidth = width
+	return a.SetPrefs(p)
+}
+
+// SetSelectionWidth remembers how wide the user dragged the selection column.
+func (a *App) SetSelectionWidth(width int) (prefs.Prefs, error) {
+	p := a.prefs.Get()
+	p.SelectionWidth = width
 	return a.SetPrefs(p)
 }
 

@@ -7,6 +7,11 @@
   --bg: #f4f5f8;
   --bg-raised: #ffffff;
   --bg-sunken: #e9ebf0;
+  /* A control that should read as pressable without becoming a block of
+     colour. Translucent rather than opaque so it lifts off whatever is behind
+     it by a shade — over the title bar that is barely half a step. */
+  --btn-face: rgba(255, 255, 255, 0.45);
+  --btn-face-hover: rgba(255, 255, 255, 0.8);
   --fg: #14161c;
   --fg-dim: rgba(20, 22, 28, 0.58);
   --fg-faint: rgba(20, 22, 28, 0.36);
@@ -46,6 +51,8 @@
   --bg: #16171d;
   --bg-raised: #1e2027;
   --bg-sunken: #101117;
+  --btn-face: rgba(255, 255, 255, 0.045);
+  --btn-face-hover: rgba(255, 255, 255, 0.085);
   --fg: #f2f3f7;
   --fg-dim: rgba(242, 243, 247, 0.6);
   --fg-faint: rgba(242, 243, 247, 0.34);
@@ -207,12 +214,39 @@ kbd {
 /* The home button carries the app's icon rather than a house glyph: ⌂ is tiny
    at text size and drawn differently by every platform's font stack. The icon
    is a fixed 20px — the one thing in the strip that should not grow with the
-   font — and sits a shade back until pointed at, so it reads as a mark rather
-   than competing with the active tab. */
-.tab-home { width: 32px; padding: 0; }
-.tab-home img { display: block; width: 20px; height: 20px; border-radius: 6px; opacity: 0.88; }
-.tab-home:hover { background: none; }
+   font.
+
+   It needs to read as a button, because it is the way back to the volume list
+   and an app icon on its own reads as decoration. The affordance is the same
+   one the tabs beside it use — a hairline and a raised ground — kept lighter
+   than an active tab so it sits behind the tabs rather than competing with
+   them, and coming fully forward on hover. */
+/* The bar is align-items: stretch, but this button inherits .tab's definite
+   27px height, so it cannot stretch — and a flex item that cannot stretch
+   falls back to the start of the cross axis, which parked the icon against the
+   top of a 40px bar. Every other control in the strip sits inside .tabs or
+   .titlebar-right, both of which centre their own children, so this is the one
+   place that has to say it. */
+.tab-home {
+  width: 30px; height: 26px; padding: 0;
+  /* The bar is align-items: stretch, but this button inherits .tab's definite
+     height, so it cannot stretch — and a flex item that cannot stretch falls
+     back to the start of the cross axis, which parked the icon against the top
+     of a 40px bar. Every other control in the strip sits inside .tabs or
+     .titlebar-right, both of which centre their own children, so this is the
+     one place that has to say it. */
+  align-self: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--btn-face);
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.tab-home img { display: block; width: 18px; height: 18px; border-radius: 5px; opacity: 0.9; }
+.tab-home:hover { background: var(--btn-face-hover); border-color: var(--line-strong); }
 .tab-home:hover img { opacity: 1; }
+.tab-home:active { background: var(--row-hover); }
+.tab-home:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .titlebar-right {
   display: flex; align-items: center; gap: 6px;
@@ -697,22 +731,31 @@ kbd {
 
 /* ----------------------------------------------------------- selection pane */
 
-/* Floats over the chart, not over the list and not above it: a column of its
-   own would squeeze the chart anyway, a bar above the list would move the rows
-   the user is in the middle of ticking, and covering the list would hide the
-   boxes they are still ticking — this opens on the first tick, so the list has
-   to stay reachable behind it. Borrows the collector's insides, because it is
-   the same idea: a basket of items with one way out. */
-.selpane {
-  position: absolute;
-  top: 0; left: 0; bottom: 0;
-  width: min(340px, 42%);
-  z-index: 22;
+/* The selection is a column to the right of the list, not an overlay: ticks
+   now survive walking into another folder, so the pane is somewhere the user
+   works for a while rather than a sheet that appears and goes. It shares the
+   column with the inspector, and takes the larger share of it — a list of
+   things the user is assembling needs the room more than a single item's
+   facts. Borrows the collector's insides, because it is the same idea: a
+   basket of items with one way out. */
+.selcol {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 210px;
+  display: flex;
   background: var(--bg-raised);
-  border-right: 1px solid var(--line);
-  box-shadow: var(--shadow);
-  display: flex; flex-direction: column;
+  border-left: 1px solid var(--line);
 }
+.selpane {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex; flex-direction: column;
+  background: var(--bg-raised);
+}
+/* Stacked under the inspector rather than beside it, so the divider between
+   them reads as one column split in two and not as a third column. */
+.selcol .inspector + .selpane { border-top: 1px solid var(--line); }
+.selcol .inspector { flex: 0 0 auto; max-height: 45%; overflow-y: auto; }
 .selpane-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .selpane-title span { font-weight: 400; color: var(--fg-faint); }
 .selpane .collector-foot { flex-wrap: wrap; }
@@ -720,6 +763,11 @@ kbd {
 .selected-item { cursor: default; }
 .selected-item:hover, .selected-item-hovered { background: var(--row-hover); }
 .selected-swatch { flex: none; }
+/* An item that has gone, or one already covered by a selected folder, stays
+   listed: a row that silently vanished would look like the app losing the
+   tick. It is dimmed because it is not part of the total. */
+.selected-item-gone, .selected-item-covered { opacity: 0.5; }
+.selected-item-gone .collected-name { text-decoration: line-through; }
 
 /* ---------------------------------------------------------------- collector */
 
@@ -762,15 +810,31 @@ kbd {
   border-top: 1px solid var(--line);
 }
 [data-layout='narrow'] .resizer { display: none; }
-/* Stacked, the list spans the whole width, so a strip down one side of it
-   would cover either the tick boxes or the sizes. The pane takes the chart's
-   share of the height instead — the same 58% the chart itself gets. */
-[data-layout='narrow'] .selpane {
-  left: 0; right: 0; bottom: auto;
-  width: auto; height: 58%;
-  border-right: none;
+/* The middle tier keeps the split. It is where the app spends most of its
+   time — a normal window at 150% interface scale lands here — so floating the
+   pane there would mean the user almost never saw the column they asked for.
+   It fits because the inspector is inline in the list at this tier, so this is
+   still three columns, and all three can shrink: the mins add up to 660 of the
+   1066 the tier starts at, and the chart's own min-width is what stops it
+   being squeezed to nothing the way it was when the collector took a column.
+
+   Stacked, though, a strip down one side would cover either the tick boxes or
+   the sizes, so the selection takes the chart's share of the height instead. */
+[data-layout='narrow'] .selcol {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 58%;
+  width: auto !important;   /* the drag width is meaningless when stacked */
+  z-index: 21;
+  border-left: none;
   border-bottom: 1px solid var(--line);
+  box-shadow: var(--shadow);
 }
+[data-layout='narrow'] .selcol .resizer { display: none; }
+/* The inspector is rendered inline in the list at these tiers, so the column
+   holds the selection alone and it should have all of it. */
+[data-layout='medium'] .selcol .inspector,
+[data-layout='narrow'] .selcol .inspector { max-height: none; }
 /* The inspector only exists as a column at the widest tier; below that
    ScanView renders it inline instead. */
 [data-layout='medium'] .inspector:not(.inspector-inline),

@@ -72,6 +72,12 @@ type Prefs struct {
 	MinItemSize int64 `json:"minItemSize"`
 	// SidebarWidth is the width of the list beside the chart, in points.
 	SidebarWidth int `json:"sidebarWidth"`
+	// SelectionWidth is the width of the column holding the selected items and
+	// the inspector, in points. Remembered separately from SidebarWidth: the
+	// two columns show different things and the user sizes them for different
+	// reasons — the list for long names, this one for how many ticks they want
+	// to see at once.
+	SelectionWidth int `json:"selectionWidth"`
 }
 
 // Sidebar width limits, in points.
@@ -147,6 +153,7 @@ func Defaults() Prefs {
 		UIScale:              1,
 		MinItemSize:          DefaultMinItemSize,
 		SidebarWidth:         350,
+		SelectionWidth:       330,
 	}
 }
 
@@ -260,6 +267,15 @@ func (p Prefs) normalized() Prefs {
 	}
 	if p.SidebarWidth > MaxSidebarWidth {
 		p.SidebarWidth = MaxSidebarWidth
+	}
+	if p.SelectionWidth == 0 {
+		p.SelectionWidth = 330
+	}
+	if p.SelectionWidth < MinSidebarWidth {
+		p.SelectionWidth = MinSidebarWidth
+	}
+	if p.SelectionWidth > MaxSidebarWidth {
+		p.SelectionWidth = MaxSidebarWidth
 	}
 	return p
 }

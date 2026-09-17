@@ -165,6 +165,11 @@ func TestAdminFlagRoundTrips(t *testing.T) {
 	if !meta.AsAdmin {
 		t.Error("an administrator scan came back marked as an ordinary one")
 	}
+	// Without this the progress bar has no way to tell an entry this version
+	// wrote from one an older build may have saved mid-scan.
+	if !meta.Vouched {
+		t.Error("a freshly saved entry is not vouched for")
+	}
 	for _, e := range c.List() {
 		if e.Key == "vol-1" && !e.AsAdmin {
 			t.Error("List dropped the administrator flag")

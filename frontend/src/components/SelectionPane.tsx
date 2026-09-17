@@ -1,29 +1,32 @@
-// The ticked rows, gathered into a pane of their own.
+// The ticked rows, gathered into a column of their own.
 //
 // The summary and the buttons used to sit in a bar above the list, which meant
 // the list jumped down the moment a box was ticked — the one time the user is
 // least able to afford the rows moving, because they are in the middle of
-// picking several of them. So the count lives in the footer instead, and this
-// pane floats over the list rather than taking space from it.
-import { KIND_DIR, KIND_PACKAGE, NodeSummary } from '../api';
+// picking several of them. So the count lives in the footer instead.
+//
+// The selection now spans folders, which is why each row carries its full
+// path: ticks survive navigation, so "everything ticked is on screen" no
+// longer holds, and this list is what makes a bulk delete reviewable.
+import { KIND_DIR, KIND_PACKAGE, SelectedItem } from '../api';
 import { arcColor, Palette } from '../colors';
-import { formatBytes, formatCount } from '../format';
+import { formatBytes, formatCount, middleTruncate } from '../format';
 import { useStore } from '../store';
 
 interface Props {
-  rows: NodeSummary[];
-  /** Index of each row in the list, so the swatch matches the chart. */
+  items: SelectedItem[];
+  /** Index of each row in the current list, so the swatch matches the chart. */
   indexOf(id: number): number;
   bytes: number;
-  /** The folder the ticks are in — every one of them is a child of it. */
-  where: string;
+  /** How many distinct folders the selection spans. */
+  folders: number;
   base2: boolean;
   palette: Palette;
   dark: boolean;
   allowPermanent: boolean;
   hovered: number;
   onHover(id: number): void;
-  onSelect(id: number): void;
+  onSelect(item: SelectedItem): void;
   onContextMenu(id: number, x: number, y: number): void;
   onRemove(id: number): void;
   onCollect(): void;
@@ -36,16 +39,19 @@ interface Props {
 export function SelectionPane(props: Props) {
   const mod = useStore((s) => s.caps.modKey);
   const {
-    rows, indexOf, bytes, where, base2, palette, dark, allowPermanent, hovered,
+    items, indexOf, bytes, folders, base2, palette, dark, allowPermanent, hovered,
     onHover, onSelect, onContextMenu, onRemove, onCollect, onTrash,
     onDeleteForever, onClear, onClose,
   } = props;
 
+  const live = items.filter((i) => !i.gone);
+
   return (
     <aside className="selpane" aria-label="Selected items">
       <header className="collector-head">
-        <h2 className="selpane-title" title={where}>
-          Selected<span> in {where}</span>
+        <h2 className="selpane-title">
+          Selected
+          {folders > 1 && <span> across {folders} folders</span>}
         </h2>
         <button className="icon-btn" onClick={onClose} aria-label="Close the selection list">
           ×
@@ -55,44 +61,62 @@ export function SelectionPane(props: Props) {
       <div className="collector-total">
         <strong>{formatBytes(bytes, base2)}</strong>
         <span>
-          in {rows.length} item{rows.length === 1 ? '' : 's'}
+          in {live.length} item{live.length === 1 ? '' : 's'}
         </span>
       </div>
 
       <div className="collector-list">
-        {rows.map((r) => {
-          const isDir = r.kind === KIND_DIR || r.kind === KIND_PACKAGE;
-          const style = arcColor(palette, indexOf(r.id), 0, r.kind, r.flags, false, dark);
+        {items.map((it) => {
+          const isDir = it.kind === KIND_DIR || it.kind === KIND_PACKAGE;
+          // An item from another folder has no place in the current list, so
+          // its index there means nothing; a stable hue from its path keeps
+          // the swatch from jumping about as the user walks the tree.
+          const idx = indexOf(it.nodeID);
+          const style = arcColor(palette, idx >= 0 ? idx : hueFor(it.path), 0, it.kind, it.flags, false, dark);
           return (
             <div
-              className={'collected selected-item' + (r.id === hovered ? ' selected-item-hovered' : '')}
-              key={r.id}
-              onMouseEnter={() => onHover(r.id)}
+              className={
+                'collected selected-item' +
+                (it.nodeID === hovered ? ' selected-item-hovered' : '') +
+                (it.gone ? ' selected-item-gone' : '') +
+                (it.covered ? ' selected-item-covered' : '')
+              }
+              key={`${it.scanID}:${it.nodeID}`}
+              onMouseEnter={() => onHover(it.nodeID)}
               onMouseLeave={() => onHover(0)}
-              onClick={() => onSelect(r.id)}
+              onClick={() => onSelect(it)}
               onContextMenu={(e) => {
                 e.preventDefault();
-                onSelect(r.id);
-                onContextMenu(r.id, e.clientX, e.clientY);
+                onSelect(it);
+                onContextMenu(it.nodeID, e.clientX, e.clientY);
               }}
             >
               <span className="row-swatch selected-swatch" style={{ background: style.fill }} aria-hidden />
               <div className="collected-main">
-                <div className="collected-name" title={r.name}>
-                  {r.name}
+                <div className="collected-name" title={it.path || it.name}>
+                  {it.name || 'item'}
                 </div>
-                <div className="collected-path">
-                  {isDir ? `folder · ${formatCount(r.files)} files` : extOf(r.name)}
+                <div className="collected-path" title={it.path}>
+                  {it.gone
+                    ? it.err || 'no longer there'
+                    : it.covered
+                      ? 'inside another selected folder'
+                      : whereOf(it.path, isDir ? `folder · ${formatCount(it.files)} files` : extOf(it.name))}
                 </div>
               </div>
-              <div className="collected-size">{formatBytes(r.size, base2)}</div>
+              {/* A covered item contributes nothing to the total, so showing
+                  its size beside a total that excludes it invites the user to
+                  add the column up and find it wrong. */}
+              <div className="collected-size">
+                {it.gone ? '—' : it.covered ? '' : formatBytes(it.size, base2)}
+              </div>
               <button
                 className="icon-btn"
-                aria-label={`Remove ${r.name} from the selection`}
+                aria-label={`Remove ${it.name || 'this item'} from the selection`}
                 title="Remove from the selection"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onRemove(r.id);
+                  onRemove(it.nodeID);
                 }}
               >
                 ×
@@ -122,10 +146,27 @@ export function SelectionPane(props: Props) {
   );
 }
 
-// NodeSummary carries no path or extension — the list only ever needed the
-// name — so the kind line is derived from the name here.
+// The folder an item is in, which is the thing the user cannot tell from the
+// name once the selection spans several of them. Falls back to the kind line
+// when there is no path to show.
+function whereOf(path: string, fallback: string): string {
+  const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+  if (cut <= 0) return fallback;
+  return middleTruncate(path.slice(0, cut), 44);
+}
+
+// SelectedItem carries no extension — the name is all the list ever needed —
+// so the kind line is derived from the name here.
 function extOf(name: string): string {
   const dot = name.lastIndexOf('.');
   if (dot <= 0 || dot === name.length - 1) return 'file';
   return name.slice(dot + 1).toUpperCase();
+}
+
+// A small stable hash, so an item keeps the same swatch for as long as it is
+// ticked no matter which folder the user happens to be looking at.
+function hueFor(path: string): number {
+  let h = 0;
+  for (let i = 0; i < path.length; i++) h = (h * 31 + path.charCodeAt(i)) | 0;
+  return Math.abs(h);
 }

@@ -42,6 +42,8 @@ export function DeleteLocalSnapshots(arg1:string,arg2:Array<string>):Promise<mai
 
 export function DeletePermanently(arg1:Array<main.ItemRef>):Promise<main.Result>;
 
+export function DescribeItems(arg1:Array<main.ItemRef>):Promise<Array<main.SelectedItem>>;
+
 export function FindNode(arg1:string,arg2:string):Promise<number>;
 
 export function GetAncestors(arg1:string,arg2:number):Promise<Array<tree.NodeSummary>>;
@@ -113,6 +115,8 @@ export function ScanCacheBytes():Promise<number>;
 export function SetMinItemSize(arg1:number):Promise<prefs.Prefs>;
 
 export function SetPrefs(arg1:prefs.Prefs):Promise<prefs.Prefs>;
+
+export function SetSelectionWidth(arg1:number):Promise<prefs.Prefs>;
 
 export function SetSidebarWidth(arg1:number):Promise<prefs.Prefs>;
 

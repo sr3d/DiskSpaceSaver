@@ -128,6 +128,27 @@ export interface ItemRef {
   nodeID: number;
 }
 
+/**
+ * One ticked row, described by Go. The pane used to be handed rows filtered
+ * out of the visible list, which is why a tick could not outlive a change of
+ * folder; these carry everything needed to show an item from anywhere.
+ */
+export interface SelectedItem {
+  scanID: string;
+  nodeID: number;
+  name: string;
+  path: string;
+  size: number;
+  kind: number;
+  flags: number;
+  files: number;
+  /** The handle is no longer in the tree — deleted, or pruned by a rescan. */
+  gone: boolean;
+  /** Inside another selected item, so its bytes are already counted there. */
+  covered: boolean;
+  err?: string;
+}
+
 export interface CollectorItem {
   scanID: string;
   nodeID: number;
@@ -170,6 +191,7 @@ export interface Prefs {
   uiScale: number;
   minItemSize: number;
   sidebarWidth: number;
+  selectionWidth: number;
 }
 
 /** A page of children plus what the size filter withheld. */
@@ -371,6 +393,8 @@ export const api = {
   setUIScale: (scale: number): Promise<Prefs> => App.SetUIScale(scale) as any,
   setMinItemSize: (bytes: number): Promise<Prefs> => App.SetMinItemSize(bytes) as any,
   setSidebarWidth: (width: number): Promise<Prefs> => App.SetSidebarWidth(width) as any,
+  setSelectionWidth: (width: number): Promise<Prefs> => App.SetSelectionWidth(width) as any,
+  describeItems: (refs: ItemRef[]): Promise<SelectedItem[]> => App.DescribeItems(refs) as any,
   addExclusion: (path: string): Promise<Prefs> => App.AddExclusion(path) as any,
   removeExclusion: (path: string): Promise<Prefs> => App.RemoveExclusion(path) as any,
 

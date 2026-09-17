@@ -32,6 +32,18 @@ type Meta struct {
 	// other way round. The zero value is correct for entries written before
 	// this field existed.
 	AsAdmin bool `json:"asAdmin"`
+	// Vouched marks an entry written by a version that refuses to save an
+	// incomplete tree. It is always true on save — both save paths check the
+	// scan finished — and exists only to tell those entries apart from older
+	// ones, which could be a cancelled scan's partial tree.
+	//
+	// It matters because the byte total doubles as the progress bar's
+	// expectation. A partial entry for this machine's data volume recorded
+	// 480 GB where a full walk finds 758 GB, so the bar climbed into the
+	// nineties a third of the way in and then had to admit it was lost. An
+	// entry we cannot vouch for is still fine to draw — a stale chart is
+	// obviously stale — but it must not be divided by.
+	Vouched bool `json:"vouched"`
 }
 
 // Cache is a directory of saved scans.
@@ -120,7 +132,7 @@ func (c *Cache) Save(key, root string, t *tree.Tree, asAdmin bool) error {
 
 	meta := Meta{
 		Key: key, Root: root, SavedAt: time.Now(),
-		Nodes: t.Count(), Bytes: rootNode.Alloc, AsAdmin: asAdmin,
+		Nodes: t.Count(), Bytes: rootNode.Alloc, AsAdmin: asAdmin, Vouched: true,
 	}
 	b, _ := json.MarshalIndent(meta, "", "  ")
 	return os.WriteFile(c.metaFile(key), b, 0o644)

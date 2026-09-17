@@ -70,6 +70,10 @@ export function DeletePermanently(arg1) {
   return window['go']['main']['App']['DeletePermanently'](arg1);
 }
 
+export function DescribeItems(arg1) {
+  return window['go']['main']['App']['DescribeItems'](arg1);
+}
+
 export function FindNode(arg1, arg2) {
   return window['go']['main']['App']['FindNode'](arg1, arg2);
 }
@@ -212,6 +216,10 @@ export function SetMinItemSize(arg1) {
 
 export function SetPrefs(arg1) {
   return window['go']['main']['App']['SetPrefs'](arg1);
+}
+
+export function SetSelectionWidth(arg1) {
+  return window['go']['main']['App']['SetSelectionWidth'](arg1);
 }
 
 export function SetSidebarWidth(arg1) {
