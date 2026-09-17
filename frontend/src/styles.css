@@ -626,17 +626,19 @@ kbd {
 
 /* ----------------------------------------------------------- selection pane */
 
-/* Floats over the list instead of sitting above it or beside it: a column of
-   its own would squeeze the chart, and a bar above the list would move the
-   rows the user is in the middle of ticking. Borrows the collector's insides,
-   because it is the same idea — a basket of items with one way out. */
+/* Floats over the chart, not over the list and not above it: a column of its
+   own would squeeze the chart anyway, a bar above the list would move the rows
+   the user is in the middle of ticking, and covering the list would hide the
+   boxes they are still ticking — this opens on the first tick, so the list has
+   to stay reachable behind it. Borrows the collector's insides, because it is
+   the same idea: a basket of items with one way out. */
 .selpane {
   position: absolute;
-  top: 0; right: 0; bottom: 0;
-  width: min(340px, 82%);
+  top: 0; left: 0; bottom: 0;
+  width: min(340px, 42%);
   z-index: 22;
   background: var(--bg-raised);
-  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
   box-shadow: var(--shadow);
   display: flex; flex-direction: column;
 }
@@ -689,6 +691,15 @@ kbd {
   border-top: 1px solid var(--line);
 }
 [data-layout='narrow'] .resizer { display: none; }
+/* Stacked, the list spans the whole width, so a strip down one side of it
+   would cover either the tick boxes or the sizes. The pane takes the chart's
+   share of the height instead — the same 58% the chart itself gets. */
+[data-layout='narrow'] .selpane {
+  left: 0; right: 0; bottom: auto;
+  width: auto; height: 58%;
+  border-right: none;
+  border-bottom: 1px solid var(--line);
+}
 /* The inspector only exists as a column at the widest tier; below that
    ScanView renders it inline instead. */
 [data-layout='medium'] .inspector:not(.inspector-inline),

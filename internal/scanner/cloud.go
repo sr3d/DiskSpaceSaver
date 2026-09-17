@@ -4,18 +4,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"golang.org/x/sys/unix"
 )
 
-// SF_DATALESS marks an item whose contents live somewhere else and would have
-// to be fetched. golang.org/x/sys/unix does not export it.
-const sfDataless = 0x40000000
-
 // Cloud file providers (iCloud Drive, Google Drive, Dropbox, OneDrive) project
-// their contents into the data volume through the FileProvider framework. They
-// are indistinguishable from ordinary APFS directories: same st_dev, same
-// statfs, no mount entry, no flag on the root.
+// their contents into the local filesystem: through the FileProvider framework
+// on macOS, through cloud filter placeholders on Windows. Either way they are
+// hard to tell from ordinary directories — on macOS they share the data
+// volume's st_dev and have no mount entry or flag on the root.
 //
 // Walking into one is wrong twice over. The bytes are not on this disk, so
 // counting them overstates what the user could reclaim; and stat-ing an
@@ -25,20 +20,6 @@ const sfDataless = 0x40000000
 //
 // They are still reported as entries, flagged, so the chart can say what they
 // are instead of silently omitting them.
-// cloudRootsFor lists, for one home directory, the directories whose children
-// are provider roots and the provider roots themselves.
-func cloudRootsFor(home string) (parents, exact []string) {
-	if home == "" {
-		return nil, nil
-	}
-	return []string{
-			// Every macOS 12+ file provider domain appears here as a child.
-			filepath.Join(home, "Library", "CloudStorage"),
-		}, []string{
-			filepath.Join(home, "Library", "Mobile Documents"), // iCloud Drive
-		}
-}
-
 // homeCloudRoots resolves the current user's provider locations. Each Scanner
 // resolves this once at construction rather than caching it in a package-level
 // variable: a process-wide cache would make the answer depend on whichever
@@ -65,11 +46,6 @@ func matchesCloudRoot(path string, parents, exact []string) bool {
 		}
 	}
 	return false
-}
-
-// isDataless reports whether an item's contents are not present locally.
-func isDataless(st *unix.Stat_t) bool {
-	return st.Flags&sfDataless != 0
 }
 
 // DescribeCloudSkip explains a skipped provider in the UI.

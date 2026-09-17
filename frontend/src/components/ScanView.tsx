@@ -182,6 +182,17 @@ export function ScanView({ scan, palette, dark }: Props) {
     setChecked(scan.id, next, 0);
   };
 
+  // Drops the ticks for rows that have just been acted on. The result only
+  // names paths, so which ones actually went cannot be told apart here; a tick
+  // left behind on a row that survived costs the user one click, while a dead
+  // id left in the set would sit there for the rest of the session.
+  const dropChecks = (ids: number[]) => {
+    if (!ids.some((id) => checked.has(id))) return;
+    const next = new Set(checked);
+    for (const id of ids) next.delete(id);
+    setChecked(scan.id, next, 0);
+  };
+
   const collectChecked = () =>
     act(async () => {
       await api.collectorAdd(checkedRows.map((r) => ref(r.id)));
@@ -198,11 +209,12 @@ export function ScanView({ scan, palette, dark }: Props) {
   // going near the flag, and a flag left set would let an Escape press be
   // swallowed by a pane that is not on screen.
   //
-  // The edge is taken from the stored tick set rather than the visible rows:
-  // a reload momentarily empties the list, and counting that as "none ticked"
-  // would re-open a pane the user had just closed. Seeded with the count at
-  // mount for the same reason, so coming back to a tab that already has ticks
-  // does not re-open it either.
+  // The edge is taken from the stored tick set rather than the visible rows,
+  // because a tick can outlive the row it belongs to — the size filter or a
+  // rescan can take the row away — and counting that as "none ticked" would
+  // re-open a pane the user had closed. Seeded with the count at mount for the
+  // same reason: coming back to a tab that already has ticks does not re-open
+  // its pane.
   const tickCount = checked.size;
   const prevTicks = useRef(tickCount);
   useEffect(() => {
@@ -251,6 +263,7 @@ export function ScanView({ scan, palette, dark }: Props) {
     const run = () =>
       act(async () => {
         const res = await api.moveToTrash(ids.map(ref));
+        dropChecks(ids);
         const failed = Object.keys(res.failed ?? {});
         if (res.succeeded?.length) {
           toast('success', `Moved ${res.succeeded.length} item${res.succeeded.length === 1 ? '' : 's'} to the Trash`,
@@ -296,6 +309,7 @@ export function ScanView({ scan, palette, dark }: Props) {
       onConfirm: () =>
         act(async () => {
           const res = await api.deletePermanently(ids.map(ref));
+          dropChecks(ids);
           if (res.succeeded?.length) {
             toast('success', `Deleted ${res.succeeded.length} item${res.succeeded.length === 1 ? '' : 's'}`,
               `${formatBytes(res.bytes, base2)} reclaimed`);
