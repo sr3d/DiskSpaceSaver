@@ -18,7 +18,9 @@ BUILD         ?= $(shell git rev-list --count HEAD 2>/dev/null || echo 0)
 # the certificate's common name: on a personal team those differ (the name
 # carries the Apple ID team, the signature carries the real OU), and a plist
 # built from the wrong one makes SMAppService fail without saying why.
-SIGN_ID       ?= $(shell security find-identity -v -p codesigning | head -1 | sed -e 's/^[^"]*"//' -e 's/"$$//')
+# Only quoted identity lines count: with none installed, security still prints
+# a "0 valid identities found" summary, which must not become the identity.
+SIGN_ID       ?= $(shell security find-identity -v -p codesigning | sed -n 's/^[^"]*"\(.*\)"$$/\1/p' | head -1)
 NOTARY_PROFILE?= diskspacesaver
 FEED_URL      ?= https://updates.diskspacesaver.app/appcast.xml
 

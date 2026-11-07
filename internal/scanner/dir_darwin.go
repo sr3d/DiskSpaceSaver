@@ -77,11 +77,11 @@ func cloudRootsFor(home string) (parents, exact []string) {
 		return nil, nil
 	}
 	return []string{
-			// Every macOS 12+ file provider domain appears here as a child.
-			filepath.Join(home, "Library", "CloudStorage"),
-		}, []string{
-			filepath.Join(home, "Library", "Mobile Documents"), // iCloud Drive
-		}
+		// Every macOS 12+ file provider domain appears here as a child.
+		filepath.Join(home, "Library", "CloudStorage"),
+	}, []string{
+		filepath.Join(home, "Library", "Mobile Documents"), // iCloud Drive
+	}
 }
 
 // rootVolumeID identifies the volume a scan starts on, so a child with a
